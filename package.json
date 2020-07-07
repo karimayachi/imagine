@@ -1,0 +1,26 @@
+{
+  "name": "imagine",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build-dev": "webpack --config webpack.dev.config",
+    "demo": "webpack-dev-server --config webpack.demo.config"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "ts-loader": "^7.0.5",
+    "typescript": "^3.9.6",
+    "webpack": "^4.43.0",
+    "webpack-cli": "^3.3.12",
+    "webpack-dev-server": "^3.11.0"
+  },
+  "dependencies": {
+    "@material/mwc-button": "^0.17.2",
+    "@material/mwc-list": "^0.17.2",
+    "@material/mwc-slider": "^0.17.2",
+    "@material/mwc-textfield": "^0.17.2",
+    "mobx": "^5.15.4"
+  }
+}

@@ -35,4 +35,4 @@ class ViewModel {
     }
 }
 
-bind(document.getElementById('bindthis'), new ViewModel);
+bind(document.getElementById('bindthis'), new ViewModel());

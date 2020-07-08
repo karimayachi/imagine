@@ -1,6 +1,7 @@
 import { observable, bind } from '../src/index';
 import '@material/mwc-button';
 import '@material/mwc-icon';
+import '@material/mwc-fab';
 import '@material/mwc-slider';
 import '@material/mwc-textfield';
 import '@material/mwc-list/mwc-list';
@@ -11,18 +12,21 @@ class ViewModel {
     @observable age: number;
     @observable genres: string[];
     @observable isDraggable: boolean;
+    @observable happyIcon: string;
 
     constructor() {
         this.name = 'Karim';
         this.age = 41;
         this.genres = ['Hip Hop'];
         this.isDraggable = true;
+        this.happyIcon = "edit";
     }
 
     reset = (): void => {
         this.name = 'Karim';
         this.age = 41;
         this.isDraggable = false;
+        this.happyIcon = "shopping_cart";
     }
 
     addGenre = (): void => {

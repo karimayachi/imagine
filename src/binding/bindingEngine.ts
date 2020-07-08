@@ -1,6 +1,7 @@
 import { isObservableProp, autorun, observe, IValueDidChange, isObservableArray } from 'mobx';
 import { BindingHandler, TextHandler, ValueHandler, OnClickHandler, ForEachHandler, AttributeHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
+import { PropertyHandler } from './propertyBinding';
 
 interface BindingHandlers {
     [key: string]: BindingHandler
@@ -97,5 +98,6 @@ BindingEngine.handlers['value'] = new ValueHandler();
 BindingEngine.handlers['foreach'] = new ForEachHandler();
 
 BindingEngine.handlers['__attribute'] = new AttributeHandler();
+BindingEngine.handlers['__property'] = new PropertyHandler();
 
 BindingEngine.handlers['onclick'] = new OnClickHandler();

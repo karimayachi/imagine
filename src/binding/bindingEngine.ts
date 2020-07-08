@@ -1,5 +1,5 @@
 import { isObservableProp, autorun, observe, IValueDidChange, isObservableArray } from 'mobx';
-import { BindingHandler, TextHandler, ValueHandler, OnClickHandler, ForEachHandler } from './bindingHandlers';
+import { BindingHandler, TextHandler, ValueHandler, OnClickHandler, ForEachHandler, AttributeHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 
 interface BindingHandlers {
@@ -16,7 +16,7 @@ export class BindingEngine {
         this.scopes = new Map<string, any>();
     }
 
-    bind = (handlerName: string, element: HTMLElement, vm: any, propertyName: string): void => {
+    bind = (handlerName: string, parameter: string, element: HTMLElement, vm: any, propertyName: string): void => {
         let preventCircularUpdate = false;
         const currentHandler: BindingHandler = BindingEngine.handlers[handlerName];
 
@@ -53,6 +53,7 @@ export class BindingEngine {
             context = new BindingContext();
             context.vm = vm;
             context.propertyName = propertyName;
+            context.parameter = parameter;
 
             contextsForElement.set(handlerName, context);
 
@@ -94,5 +95,7 @@ export class BindingEngine {
 BindingEngine.handlers['text'] = new TextHandler();
 BindingEngine.handlers['value'] = new ValueHandler();
 BindingEngine.handlers['foreach'] = new ForEachHandler();
+
+BindingEngine.handlers['__attribute'] = new AttributeHandler();
 
 BindingEngine.handlers['onclick'] = new OnClickHandler();

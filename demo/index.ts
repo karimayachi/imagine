@@ -10,16 +10,19 @@ class ViewModel {
     @observable name: string;
     @observable age: number;
     @observable genres: string[];
+    @observable isDraggable: boolean;
 
     constructor() {
         this.name = 'Karim';
         this.age = 41;
         this.genres = ['Hip Hop'];
+        this.isDraggable = true;
     }
 
     reset = (): void => {
         this.name = 'Karim';
         this.age = 41;
+        this.isDraggable = false;
     }
 
     addGenre = (): void => {

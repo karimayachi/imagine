@@ -35,6 +35,12 @@ export class OnClickHandler implements BindingHandler {
     }
 }
 
+export class AttributeHandler implements BindingHandler {
+    update(element: HTMLElement, value: string, context: BindingContext): void {
+        element.setAttribute(context.parameter!, value);
+    }
+}
+
 export class ForEachHandler implements BindingHandler {
     init(element: HTMLElement, _value: any, context: BindingContext, _updateValue: (value: string) => void): void {
         let template: DocumentFragment = document.createDocumentFragment();

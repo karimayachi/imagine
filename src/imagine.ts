@@ -55,17 +55,27 @@ export class Imagine {
     }
 
     private bindAttributes(node: HTMLElement, vm: any) {
-        for (let index = 0; index < node.attributes.length; index++) {
+        for (let index = node.attributes.length - 1; index >= 0; index--) {
             let attribute: string = node.attributes[index].name;
             let propertyName: string = node.attributes[index].value;
 
             if (attribute[0] === '@') {
-                // try {
-                    this.bindingEngine.bind(attribute.substr(1), node, vm, propertyName);
-                // }
-                // catch {
-                //     throw (`No such binding: ${attribute}`);
-                // }
+                try {
+                    this.bindingEngine.bind(attribute.substr(1), '', node, vm, propertyName);
+                    node.removeAttribute(attribute);
+                }
+                catch {
+                    throw (`No such binding: ${attribute}`);
+                }
+            }
+            if(attribute[0] === ':') {
+                if((<any>node)[attribute.substr(1)]) {
+                    this.bindingEngine.bind('__property', attribute.substr(1), node, vm, propertyName);
+                }
+                else {
+                    this.bindingEngine.bind('__attribute', attribute.substr(1), node, vm, propertyName);
+                }
+                node.removeAttribute(attribute);
             }
         }
     }
@@ -83,7 +93,7 @@ export class Imagine {
                 if (matches![i]) {
                     let propertyName: string = matches![i].substring(2, matches![i].length - 1);
 
-                    this.bindingEngine.bind('text', boundElement, vm, propertyName);
+                    this.bindingEngine.bind('text', '', boundElement, vm, propertyName);
                     newNodeList.push(boundElement);
                 }
             }

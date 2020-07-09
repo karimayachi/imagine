@@ -41,6 +41,32 @@ export class AttributeHandler implements BindingHandler {
     }
 }
 
+export class WithHandler implements BindingHandler {
+    init(element: HTMLElement, _value: any, context: BindingContext, _updateValue: (value: string) => void): void {
+        let template: DocumentFragment = document.createDocumentFragment();
+
+        while (element.childNodes.length > 0) {
+            template.appendChild(element.childNodes[0]);
+        }
+
+        scopes.set(context.propertyName, context.vm);
+        context.template = template;
+    }
+
+    update(element: HTMLElement, value: string, context: BindingContext, change: IArraySplice<any>): void {
+        if(value === undefined || value === null) {
+            element.innerText = '';
+        }
+        else {
+            if (context.template) {
+                let newItem: HTMLElement = <HTMLElement>context.template.cloneNode(true);
+                bind(newItem, value);
+                element.appendChild(newItem);
+            }
+        }
+    }
+}
+
 export class ForEachHandler implements BindingHandler {
     init(element: HTMLElement, _value: any, context: BindingContext, _updateValue: (value: string) => void): void {
         let template: DocumentFragment = document.createDocumentFragment();

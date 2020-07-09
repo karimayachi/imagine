@@ -54,18 +54,34 @@ export class WithHandler implements BindingHandler {
     }
 
     update(element: HTMLElement, value: string, context: BindingContext, change: IArraySplice<any>): void {
-        if(value === undefined || value === null) {
-            element.innerText = '';
-        }
-        else {
-            if (context.template) {
-                let newItem: HTMLElement = <HTMLElement>context.template.cloneNode(true);
-                bind(newItem, value);
-                element.appendChild(newItem);
-            }
+        element.innerText = '';
+
+        if (value !== undefined && value !== null && context.template) {
+            let newItem: HTMLElement = <HTMLElement>context.template.cloneNode(true);
+            bind(newItem, value);
+            element.appendChild(newItem);
         }
     }
 }
+
+export class HtmlHandler implements BindingHandler {
+    update(element: HTMLElement, value: string, context: BindingContext, change: IArraySplice<any>): void {
+        element.innerText = '';
+
+        if (value !== undefined && value !== null) {
+            let template: HTMLTemplateElement = document.createElement('template');
+            template.innerHTML = value;
+            
+            element.appendChild(template.content);
+            setTimeout(() => { // Move init to back of callstack, so Custom Element is initialized first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
+                for(let index=0; index < element.childNodes.length; index++) {
+                    bind(<HTMLElement>element.childNodes[index], context.vm);
+                }
+            }, 0);
+        }
+    }
+}
+
 
 export class ForEachHandler implements BindingHandler {
     init(element: HTMLElement, _value: any, context: BindingContext, _updateValue: (value: string) => void): void {
@@ -90,11 +106,11 @@ export class ForEachHandler implements BindingHandler {
             }
 
             for (let item of change.removed) {
-                for(let index = element.childNodes.length - 1; index >= 0; index--) {
-                    if(contexts.has(<HTMLElement>element.childNodes[index]) && 
-                       contexts.get(<HTMLElement>element.childNodes[index])!.has('template')) {
+                for (let index = element.childNodes.length - 1; index >= 0; index--) {
+                    if (contexts.has(<HTMLElement>element.childNodes[index]) &&
+                        contexts.get(<HTMLElement>element.childNodes[index])!.has('template')) {
                         let vm: any = contexts.get(<HTMLElement>element.childNodes[index])!.get('template')!.vm;
-                        if(item === vm) {
+                        if (item === vm) {
                             element.childNodes[index].remove();
                         }
                     }

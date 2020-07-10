@@ -60,16 +60,16 @@ export class Imagine {
             let propertyName: string = node.attributes[index].value;
 
             if (attribute[0] === '@') {
-                try {
+                // try {
                     this.bindingEngine.bind(attribute.substr(1), '', node, vm, propertyName);
                     node.removeAttribute(attribute);
-                }
-                catch {
-                    throw (`No such binding: ${attribute}`);
-                }
+                // }
+                // catch {
+                //     throw (`No such binding: ${attribute}`);
+                // }
             }
             if(attribute[0] === ':') {
-                if((<any>node)[attribute.substr(1)]) {
+                if(attribute.substr(1) in node) {
                     this.bindingEngine.bind('__property', attribute.substr(1), node, vm, propertyName);
                 }
                 else {

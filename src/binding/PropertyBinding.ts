@@ -7,7 +7,7 @@ export class PropertyHandler implements BindingHandler {
         setTimeout(() => { // Move init to back of callstack, so Custom Element is initialized first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
             let propertyName: string = context.parameter!;
             let descriptor: PropertyDescriptor | undefined = getPropertyDescriptorFromPrototypeChain(element, propertyName);
-
+            
             if (descriptor) {
                 Object.defineProperty(element, propertyName, {
                     enumerable: descriptor.enumerable || false,
@@ -17,10 +17,10 @@ export class PropertyHandler implements BindingHandler {
                         if (descriptor!.set) {
                             descriptor!.set!.call(element, v);
                         }
-                        updateValue(v);
-                        // if (ko.isObservable(properties[prop]) && !properties[prop].__kowc_stopLoopback) {
-                        //     properties[prop](v);
-                        // }
+                        if(!context.preventCircularUpdate) {
+                            updateValue(v);
+                        }
+                        context.preventCircularUpdate = false;
                     }
                 });
 
@@ -44,6 +44,7 @@ export class PropertyHandler implements BindingHandler {
 
     update(element: HTMLElement, value: string, context: BindingContext, change: IArraySplice<any>): void {
         setTimeout(() => { // Move update to back of callstack, so Custom Element is initialized first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
+            context.preventCircularUpdate = true;
             (<any>element)[context.parameter!] = value;
         }, 0);
     }

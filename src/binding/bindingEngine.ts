@@ -18,7 +18,6 @@ export class BindingEngine {
     }
 
     bind = (handlerName: string, parameter: string, element: HTMLElement, vm: any, propertyName: string): void => {
-        let preventCircularUpdate = false;
         const currentHandler: BindingHandler = BindingEngine.handlers[handlerName];
 
         let contextsForElement: Map<string, BindingContext>;
@@ -60,7 +59,7 @@ export class BindingEngine {
 
             currentHandler.init?.call(this, element, propertyValue, context, (value: any): void => { // for event bindings this updateFunction should not be provided
                 if (propertyName !== 'this') {
-                    preventCircularUpdate = true;
+                    context.preventCircularUpdate = true;
                     scope[propertyName] = value;
                 }
             });
@@ -71,11 +70,11 @@ export class BindingEngine {
 
         if (isObservableProp(scope, propertyName) && currentHandler.update) {
             const updateFunction = (change?: IValueDidChange<any>) => {
-                if (!preventCircularUpdate) {
+                if (!context.preventCircularUpdate) {
                     currentHandler.update!(element, scope[propertyName], context, change);
                 }
 
-                preventCircularUpdate = false;
+                context.preventCircularUpdate = false;
             };
 
             if (isObservableArray(vm[propertyName])) {

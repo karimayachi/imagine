@@ -12,6 +12,7 @@
 <body>
     <div id="bindthis">
         <h1><mwc-fab :icon="happyIcon"></mwc-fab> Hello ${name}</h1>
+        ${happyIcon}
 
         <div :draggable="isDraggable">
             It seems your age is ${age} and your favorite genres of music are:
@@ -30,6 +31,11 @@
             <mwc-slider @value="age" pin step="1"></mwc-slider>
             <mwc-button @onClick="reset" label="Reset!"></mwc-button>
             <mwc-button @onClick="addGenre" label="Add genre"></mwc-button>
+            <mwc-button @onClick="showPeopleView" label="Show People"></mwc-button>
+        </div>
+
+        <div @with="selectedVM">
+            <div @html="html"></div>
         </div>
     </div>
 

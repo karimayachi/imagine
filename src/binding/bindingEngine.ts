@@ -105,7 +105,7 @@ export class BindingEngine {
                 context.preventCircularUpdate = false;
             };
 
-            if (isObservable(scope[propertyName]) || isObservableArray(vm[propertyName])) {
+            if (isBoxedObservable(scope[propertyName]) || isObservableArray(vm[propertyName])) {
                 observe(scope[propertyName], updateFunction);
             }
             else {

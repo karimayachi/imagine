@@ -125,14 +125,11 @@ export class ForEachHandler implements BindingHandler {
                 bind(content, item);
 
                 /* insert selectedItem functionality */
-                console.log('BIND CHILDREN', content)
                 for (let i = 0; i < content.childNodes.length; i++) {
                     let itemElement: HTMLElement = <HTMLElement>content.childNodes[i];
                     if (itemElement.nodeType === 1) {
                         setTimeout(() => { // Move init to back of callstack, so Binding is done first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
                             if ('selecteditem' in element) {
-                                console.log('--', itemElement)
-
                                 if ((<any>element).selectedItem === item) {
                                     (<any>itemElement).selected = true;
                                 }
@@ -142,7 +139,6 @@ export class ForEachHandler implements BindingHandler {
                                 };
 
                                 observe(vm.selected, change => {
-                                    console.log('SELECTED changed', change.newValue)
                                     if (change.newValue === true) {
                                         (<any>element).selecteditem = item;
                                     }

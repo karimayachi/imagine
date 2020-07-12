@@ -14,7 +14,6 @@ export class PropertyHandler implements BindingHandler {
                     configurable: descriptor.enumerable || false,
                     get: descriptor.get,
                     set: (value: any): void => {
-                        console.log('Set property value', propertyName, value);
                         if (descriptor!.set) {
                             descriptor!.set!.call(element, value);
                         }

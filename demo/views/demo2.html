@@ -2,7 +2,7 @@
 
     <h1>Material Design Web Components</h1>
 
-    <mwc-list @foreach="people" style="width: 300px">
+    <mwc-list @foreach="people" style="width: 300px" :selectedItem="selectedPerson">
         <mwc-list-item hasMeta>
             [${id}] ${firstname}
             <mwc-icon slot="meta" @onClick="people.delete">delete</mwc-icon>

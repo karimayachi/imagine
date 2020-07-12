@@ -1,6 +1,6 @@
 import { BindingHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
-import { IArraySplice } from 'mobx';
+import { IArraySplice, observable, decorate, extendObservable } from 'mobx';
 
 export class PropertyHandler implements BindingHandler {
     init(element: HTMLElement, _value: any, context: BindingContext, updateValue: (value: any) => void): void {
@@ -25,13 +25,26 @@ export class PropertyHandler implements BindingHandler {
                 });
             }
             else {
-                let closureValue: any;
-                Object.defineProperty(element, propertyName, {
-                    enumerable: true,
-                    configurable: true,
-                    get: () => closureValue,
-                    set: (value: any): void => {
-                        closureValue = value;
+                let closureValue: any = observable.box();
+                // Object.defineProperty(element, propertyName, {
+                //     enumerable: true,
+                //     configurable: true,
+                //     get: closureValue.get,
+                //     set: (value: any): void => {
+                //         closureValue.set(value);
+                //         if(!context.preventCircularUpdate) {
+                //             updateValue(value);
+                //         }
+                //         context.preventCircularUpdate = false;
+                //     }
+                // });
+                extendObservable(element, {
+                    POEPZAK: {},
+                    get selecteditem():any {
+                        return this.POEPZAK;
+                    },
+                    set selecteditem(value: any) {
+                        this.POEPZAK = value;
                         if(!context.preventCircularUpdate) {
                             updateValue(value);
                         }

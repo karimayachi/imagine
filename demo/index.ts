@@ -19,6 +19,7 @@ class PeopleViewModel {
         this.html = '';
         this.people = [new Person('Karim', 'Ayachi', 1), new Person('John', 'Doe', 2)];
         this.selectedPerson = this.people[1];
+        observe(this.selectedPerson, ()=>{console.log('person changed')});
     }
 
     add = (): void => {

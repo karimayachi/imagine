@@ -1,6 +1,6 @@
 import { BindingContext } from './bindingContext';
 import { bind, scopes, contexts, bindingEngine } from '../index';
-import { IArraySplice, observe, observable } from 'mobx';
+import { IArraySplice, observe, observable, isObservableProp } from 'mobx';
 
 export abstract class BindingHandler {
     abstract init?(element: HTMLElement, value: any, context: BindingContext, updateValue: (value: string) => void): void;
@@ -128,19 +128,33 @@ export class ForEachHandler implements BindingHandler {
                 for (let i = 0; i < content.childNodes.length; i++) {
                     let itemElement: HTMLElement = <HTMLElement>content.childNodes[i];
                     if (itemElement.nodeType === 1) {
-                        setTimeout(() => { // Move init to back of callstack, so Binding is done first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
+                        setTimeout(() => { // Move to back of callstack, so Binding is done first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
                             if ('selecteditem' in element) {
-                                if ((<any>element).selectedItem === item) {
-                                    (<any>itemElement).selected = true;
-                                }
-
                                 let vm = {
                                     selected: observable.box(false)
                                 };
 
                                 observe(vm.selected, change => {
                                     if (change.newValue === true) {
+                                        console.log((<any>element).selecteditem);
                                         (<any>element).selecteditem = item;
+                                    }
+                                });
+
+                                if ((<any>element).selecteditem === item) {
+                                    setTimeout(() => {// Move to back of callstack -- just moving to back of stack isn't even enough: set a small timeout.. This is very dangerous. TODO: Replace with polling for selected-property
+                                        (<any>itemElement).selected = true;
+                                    }, 10);
+                                }
+
+                                console.log(isObservableProp(element, 'selecteditem'));
+                                observe(element, 'selecteditem', change => {
+                                    console.log('change observed from: ', itemElement);
+                                    if (change.newValue === item) {
+                                        (<any>itemElement).selected = true;
+                                    }
+                                    else {
+                                        (<any>itemElement).selected = false;
                                     }
                                 });
 

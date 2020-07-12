@@ -1,26 +1,28 @@
 <div class="material-theme">
 
     <h1>Material Design Web Components</h1>
-    <ul @foreach="people">
-        <li>
+
+    <mwc-list @foreach="people" style="width: 300px">
+        <mwc-list-item hasMeta>
             [${id}] ${firstname}
-            <mwc-icon-button icon="delete" @onClick="people.delete"></mwc-icon-button>
-        </li>
-    </ul>
+            <mwc-icon slot="meta" @onClick="people.delete">delete</mwc-icon>
+        </mwc-list-item>
+        <li divider role="separator"></li>
+    </mwc-list>
+
     <mwc-button @onClick="add">Add</mwc-button>
 
-
     <div style="margin: 40px 0px 150px;">
-        <!-- <mwc-select label="People" data-bind="select: { options: people, property: { value: selectedPerson }}" style="margin-bottom: 20px;">
-            <mwc-list-item data-bind="properties: { value: $value() }, text: firstname"></mwc-list-item>
-        </mwc-select> -->
+        <mwc-select label="People" @foreach="people" :selectedItem="selectedPerson" style="margin-bottom: 20px;">
+            <mwc-list-item value="dummy">${firstname}</mwc-list-item>
+        </mwc-select>
 
         <div @with="selectedPerson">
             <mwc-textfield label="Firstname" :value="firstname"></mwc-textfield>
             <mwc-textfield label="Lastname" :value="lastname"></mwc-textfield>
-            <mwc-formfield label="Retired">
+            <!-- <mwc-formfield label="Retired">
                 <mwc-checkbox :checked="retired"></mwc-checkbox>
-            </mwc-formfield>
+            </mwc-formfield> -->
         </div>
     </div>
 </div>

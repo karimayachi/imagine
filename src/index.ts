@@ -13,3 +13,4 @@ export { observable } from 'mobx';
 export const bind = ImagineInstance.bind;
 export const contexts = ImagineInstance.bindingEngine.boundElements;
 export const scopes = ImagineInstance.bindingEngine.scopes;
+export const bindingEngine = ImagineInstance.bindingEngine;

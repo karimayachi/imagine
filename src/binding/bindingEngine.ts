@@ -1,4 +1,4 @@
-import { isObservableProp, autorun, observe, IValueDidChange, isObservableArray } from 'mobx';
+import { isObservableProp, autorun, observe, IValueDidChange, isObservableArray, isObservable, isBoxedObservable } from 'mobx';
 import { BindingHandler, TextHandler, ValueHandler, OnClickHandler, ForEachHandler, AttributeHandler, WithHandler, HtmlHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { PropertyHandler } from './propertyBinding';
@@ -17,7 +17,7 @@ export class BindingEngine {
         this.scopes = new Map<string, any>();
     }
 
-    bind = (handlerName: string, parameter: string, element: HTMLElement, vm: any, propertyName: string): void => {
+    bindInitPhase = (handlerName: string, parameter: string, element: HTMLElement, vm: any, propertyName: string): void => {
         const currentHandler: BindingHandler = BindingEngine.handlers[handlerName];
 
         let contextsForElement: Map<string, BindingContext>;
@@ -60,24 +60,52 @@ export class BindingEngine {
             currentHandler.init?.call(this, element, propertyValue, context, (value: any): void => { // for event bindings this updateFunction should not be provided
                 if (propertyName !== 'this') {
                     context.preventCircularUpdate = true;
-                    scope[propertyName] = value;
+                    if(isBoxedObservable(scope[propertyName])) {
+                        scope[propertyName].set(value);
+                    }
+                    else {
+                        scope[propertyName] = value;
+                    }
                 }
             });
         }
-        else {
-            context = contextsForElement.get(handlerName)!;
+    }
+
+    bindUpdatePhase = (handlerName: string, parameter: string, element: HTMLElement, vm: any, propertyName: string): void => {
+        const currentHandler: BindingHandler = BindingEngine.handlers[handlerName];
+        const contextsForElement: Map<string, BindingContext> = this.boundElements.get(element)!;
+        let scope: any = vm;
+
+        if(propertyName.indexOf('.') > -1) {
+            let scopeName: string = propertyName.split('.')[0];
+            propertyName = propertyName.split('.')[1];
+
+            if(!this.scopes.has(scopeName)) {
+                throw(`Undefined scope: ${scopeName}`);
+            }
+            else {
+                scope = this.scopes.get(scopeName);
+            }
         }
 
-        if (isObservableProp(scope, propertyName) && currentHandler.update) {
+        let propertyValue: any = propertyName === 'this' ? scope : scope[propertyName];
+        let context: BindingContext = contextsForElement.get(handlerName)!;
+
+        if ((isObservable(scope[propertyName]) || isObservableProp(scope, propertyName)) && currentHandler.update) {
             const updateFunction = (change?: IValueDidChange<any>) => {
                 if (!context.preventCircularUpdate) {
-                    currentHandler.update!(element, scope[propertyName], context, change);
+                    if(isBoxedObservable(scope[propertyName])) {
+                        currentHandler.update!(element, scope[propertyName].get(), context, change);
+                    }
+                    else {
+                        currentHandler.update!(element, scope[propertyName], context, change);
+                    }
                 }
 
                 context.preventCircularUpdate = false;
             };
 
-            if (isObservableArray(vm[propertyName])) {
+            if (isObservable(scope[propertyName]) || isObservableArray(vm[propertyName])) {
                 observe(scope[propertyName], updateFunction);
             }
             else {

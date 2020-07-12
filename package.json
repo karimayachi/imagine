@@ -19,7 +19,9 @@
   "dependencies": {
     "@material/mwc-button": "^0.17.2",
     "@material/mwc-fab": "^0.17.2",
+    "@material/mwc-icon-button": "^0.17.2",
     "@material/mwc-list": "^0.17.2",
+    "@material/mwc-select": "^0.17.2",
     "@material/mwc-slider": "^0.17.2",
     "@material/mwc-textfield": "^0.17.2",
     "mobx": "^5.15.4"

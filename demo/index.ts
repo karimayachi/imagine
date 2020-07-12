@@ -1,11 +1,14 @@
 import { observable, bind } from '../src/index';
 import '@material/mwc-button';
+import '@material/mwc-icon-button';
 import '@material/mwc-icon';
 import '@material/mwc-fab';
+import '@material/mwc-select';
 import '@material/mwc-slider';
 import '@material/mwc-textfield';
 import '@material/mwc-list/mwc-list';
 import '@material/mwc-list/mwc-list-item';
+import { observe } from 'mobx';
 
 class PeopleViewModel {
     @observable html: string;
@@ -15,13 +18,15 @@ class PeopleViewModel {
     constructor() {
         this.html = '';
         this.people = [new Person('Karim', 'Ayachi', 1), new Person('John', 'Doe', 2)];
-        this.selectedPerson = this.people[0];
+        this.selectedPerson = this.people[1];
+
+        observe(this, 'selectedPerson', (change): void => { console.log('Selected Person changed', change);});
     }
 
     add = (): void => {
         let newPerson: Person = new Person('', '', this.people.length + 1);
         this.people.push(newPerson);
-        this.selectedPerson = newPerson; 
+        this.selectedPerson = newPerson;
     };
 
     delete = (person: Person): void => {

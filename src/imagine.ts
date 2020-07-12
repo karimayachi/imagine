@@ -1,6 +1,5 @@
 import { BindingEngine } from './binding/bindingEngine';
 import { BindingContext } from './binding/bindingContext';
-import { contexts } from 'index';
 
 export class Imagine {
     bindingEngine: BindingEngine;
@@ -55,28 +54,34 @@ export class Imagine {
     }
 
     private bindAttributes(node: HTMLElement, vm: any) {
+        /* first INIT all bindings */
         for (let index = node.attributes.length - 1; index >= 0; index--) {
-            let attribute: string = node.attributes[index].name;
-            let propertyName: string = node.attributes[index].value;
+            let parsedAttribute = this.parseAttribute(node.attributes[index].name);
+            if(parsedAttribute.bindingHandler) {
+                this.bindingEngine.bindInitPhase(parsedAttribute.bindingHandler, parsedAttribute.parameter, node, vm, node.attributes[index].value);
+            }
+        }
+    
+        /* next UPDATE all bindings and remove attributes */
+        for (let index = node.attributes.length - 1; index >= 0; index--) {
+            let parsedAttribute = this.parseAttribute(node.attributes[index].name);
+            if(parsedAttribute.bindingHandler) {
+                this.bindingEngine.bindUpdatePhase(parsedAttribute.bindingHandler, parsedAttribute.parameter, node, vm, node.attributes[index].value);
+                node.removeAttribute(node.attributes[index].name);
+            }
+         }
+    }
 
-            if (attribute[0] === '@') {
-                // try {
-                    this.bindingEngine.bind(attribute.substr(1), '', node, vm, propertyName);
-                    node.removeAttribute(attribute);
-                // }
-                // catch {
-                //     throw (`No such binding: ${attribute}`);
-                // }
-            }
-            if(attribute[0] === ':') {
-                if(attribute.substr(1) in node) {
-                    this.bindingEngine.bind('__property', attribute.substr(1), node, vm, propertyName);
-                }
-                else {
-                    this.bindingEngine.bind('__attribute', attribute.substr(1), node, vm, propertyName);
-                }
-                node.removeAttribute(attribute);
-            }
+    private parseAttribute(attribute: string): { bindingHandler: string | null, parameter: string } {
+        switch(attribute[0]) {
+            case '@':
+                return { bindingHandler: attribute.substr(1), parameter: '' };
+            case ':':
+                return { bindingHandler: '__property', parameter: attribute.substr(1) };
+            case '_':
+                return { bindingHandler: '__attribute', parameter: attribute.substr(1) };
+            default:
+                return { bindingHandler: null, parameter: '' };
         }
     }
 
@@ -93,7 +98,8 @@ export class Imagine {
                 if (matches![i]) {
                     let propertyName: string = matches![i].substring(2, matches![i].length - 1);
 
-                    this.bindingEngine.bind('text', '', boundElement, vm, propertyName);
+                    this.bindingEngine.bindInitPhase('text', '', boundElement, vm, propertyName);
+                    this.bindingEngine.bindUpdatePhase('text', '', boundElement, vm, propertyName);
                     newNodeList.push(boundElement);
                 }
             }

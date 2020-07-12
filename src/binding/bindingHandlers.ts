@@ -1,6 +1,6 @@
 import { BindingContext } from './bindingContext';
-import { bind, scopes, contexts } from '../index';
-import { IValueDidChange, IArrayChange, IMapDidChange, IArraySplice } from 'mobx';
+import { bind, scopes, contexts, bindingEngine } from '../index';
+import { IArraySplice, observe, observable } from 'mobx';
 
 export abstract class BindingHandler {
     abstract init?(element: HTMLElement, value: any, context: BindingContext, updateValue: (value: string) => void): void;
@@ -71,10 +71,10 @@ export class HtmlHandler implements BindingHandler {
         if (value !== undefined && value !== null) {
             let template: HTMLTemplateElement = document.createElement('template');
             template.innerHTML = value;
-            
+
             element.appendChild(template.content);
             setTimeout(() => { // Move init to back of callstack, so Custom Element is initialized first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
-                for(let index=0; index < element.childNodes.length; index++) {
+                for (let index = 0; index < element.childNodes.length; index++) {
                     bind(<HTMLElement>element.childNodes[index], context.vm);
                 }
             }, 0);
@@ -82,9 +82,9 @@ export class HtmlHandler implements BindingHandler {
     }
 }
 
-
 export class ForEachHandler implements BindingHandler {
     init(element: HTMLElement, _value: any, context: BindingContext, _updateValue: (value: string) => void): void {
+        /* save the childnodes as template in the context */
         let template: DocumentFragment = document.createDocumentFragment();
 
         while (element.childNodes.length > 0) {
@@ -95,14 +95,10 @@ export class ForEachHandler implements BindingHandler {
         context.template = template;
     }
 
-    update(element: HTMLElement, value: string, context: BindingContext, change: IArraySplice<any>): void {
+    update(element: HTMLElement, value: any, context: BindingContext, change: IArraySplice<any>): void {
         if (change) {
             for (let item of change.added) {
-                if (context.template) {
-                    let newItem: HTMLElement = <HTMLElement>context.template.cloneNode(true);
-                    bind(newItem, item);
-                    element.appendChild(newItem);
-                }
+                addItem(item);
             }
 
             for (let item of change.removed) {
@@ -119,11 +115,47 @@ export class ForEachHandler implements BindingHandler {
         }
         else {
             for (let item of value) {
-                if (context.template) {
-                    let content: DocumentFragment = <DocumentFragment>context.template.cloneNode(true);
-                    bind(content, item);
-                    element.appendChild(content);
+                addItem(item);
+            }
+        }
+
+        function addItem(item: any) {
+            if (context.template) {
+                let content: DocumentFragment = <DocumentFragment>context.template.cloneNode(true);
+                bind(content, item);
+
+                /* insert selectedItem functionality */
+                console.log('BIND CHILDREN', content)
+                for (let i = 0; i < content.childNodes.length; i++) {
+                    let itemElement: HTMLElement = <HTMLElement>content.childNodes[i];
+                    if (itemElement.nodeType === 1) {
+                        setTimeout(() => { // Move init to back of callstack, so Binding is done first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
+                            if ('selecteditem' in element) {
+                                console.log('--', itemElement)
+
+                                if ((<any>element).selectedItem === item) {
+                                    (<any>itemElement).selected = true;
+                                }
+
+                                let vm = {
+                                    selected: observable.box(false)
+                                };
+
+                                observe(vm.selected, change => {
+                                    console.log('SELECTED changed', change.newValue)
+                                    if (change.newValue === true) {
+                                        (<any>element).selecteditem = item;
+                                    }
+                                });
+
+                                bindingEngine.bindInitPhase('__property', 'selected', itemElement, vm, 'selected');
+                                bindingEngine.bindUpdatePhase('__property', 'selected', itemElement, vm, 'selected');
+                            }
+                        }, 0);
+                    }
                 }
+
+                element.appendChild(content);
             }
         }
     }

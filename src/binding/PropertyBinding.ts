@@ -7,37 +7,38 @@ export class PropertyHandler implements BindingHandler {
         setTimeout(() => { // Move init to back of callstack, so Custom Element is initialized first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
             let propertyName: string = context.parameter!;
             let descriptor: PropertyDescriptor | undefined = getPropertyDescriptorFromPrototypeChain(element, propertyName);
-            
+
             if (descriptor) {
                 Object.defineProperty(element, propertyName, {
                     enumerable: descriptor.enumerable || false,
                     configurable: descriptor.enumerable || false,
                     get: descriptor.get,
-                    set: (v: any): void => {
+                    set: (value: any): void => {
+                        console.log('Set property value', propertyName, value);
                         if (descriptor!.set) {
-                            descriptor!.set!.call(element, v);
+                            descriptor!.set!.call(element, value);
                         }
                         if(!context.preventCircularUpdate) {
-                            updateValue(v);
+                            updateValue(value);
                         }
                         context.preventCircularUpdate = false;
                     }
                 });
-
-                // for (let customEvent of ko.bindingHandlers['properties'].customEvents) {
-                //     let propertyName: string = customEvent.property;
-
-                //     if (prop === propertyName) {
-                //         element.addEventListener(customEvent.event, (): void => {
-                //             if (ko.isObservable(properties[propertyName])) {
-                //                 properties[propertyName]((<any>element)[propertyName]);
-                //             }
-                //         });
-                //     }
-                // }
             }
             else {
-                throw ('No getter/setter for current property');
+                let closureValue: any;
+                Object.defineProperty(element, propertyName, {
+                    enumerable: true,
+                    configurable: true,
+                    get: () => closureValue,
+                    set: (value: any): void => {
+                        closureValue = value;
+                        if(!context.preventCircularUpdate) {
+                            updateValue(value);
+                        }
+                        context.preventCircularUpdate = false;
+                    }
+                });
             }
         }, 0);
     }

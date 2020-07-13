@@ -129,16 +129,19 @@ export class ForEachHandler implements BindingHandler {
                     let itemElement: HTMLElement = <HTMLElement>content.childNodes[i];
                     if (itemElement.nodeType === 1) {
                         setTimeout(() => { // Move to back of callstack, so Binding is done first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
-                            if ('selecteditem' in element) {
+                            if ('selecteditem' in element && 'selected' in itemElement) {
                                 let vm = {
                                     selected: observable.box(false)
                                 };
 
+                                let innerPreventCircularUpdate: boolean = false;
+
                                 observe(vm.selected, change => {
-                                    if (change.newValue === true) {
-                                        console.log((<any>element).selecteditem);
+                                    if (change.newValue === true && !innerPreventCircularUpdate) {
+                                        innerPreventCircularUpdate = true;
                                         (<any>element).selecteditem = item;
                                     }
+                                    innerPreventCircularUpdate = false;
                                 });
 
                                 if ((<any>element).selecteditem === item) {
@@ -146,16 +149,20 @@ export class ForEachHandler implements BindingHandler {
                                         (<any>itemElement).selected = true;
                                     }, 10);
                                 }
-
-                                console.log(isObservableProp(element, 'selecteditem'));
+                                
                                 observe(element, 'selecteditem', change => {
-                                    console.log('change observed from: ', itemElement);
-                                    if (change.newValue === item) {
-                                        (<any>itemElement).selected = true;
+                                    if(!innerPreventCircularUpdate) {
+                                        innerPreventCircularUpdate = true;
+
+                                        if (change.newValue === item) {
+                                            (<any>itemElement).selected = true;
+                                        }
+                                        else {
+                                            (<any>itemElement).selected = false;
+                                        }    
                                     }
-                                    else {
-                                        (<any>itemElement).selected = false;
-                                    }
+
+                                    innerPreventCircularUpdate = false;
                                 });
 
                                 bindingEngine.bindInitPhase('__property', 'selected', itemElement, vm, 'selected');

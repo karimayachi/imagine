@@ -6,6 +6,8 @@ import '@material/mwc-fab';
 import '@material/mwc-select';
 import '@material/mwc-slider';
 import '@material/mwc-textfield';
+import '@material/mwc-checkbox';
+import '@material/mwc-formfield';
 import '@material/mwc-list/mwc-list';
 import '@material/mwc-list/mwc-list-item';
 import { observe } from 'mobx';
@@ -19,7 +21,6 @@ class PeopleViewModel {
         this.html = '';
         this.people = [new Person('Karim', 'Ayachi', 1), new Person('John', 'Doe', 2)];
         this.selectedPerson = this.people[1];
-        observe(this.selectedPerson, ()=>{console.log('person changed')});
     }
 
     add = (): void => {

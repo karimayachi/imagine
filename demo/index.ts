@@ -10,7 +10,6 @@ import '@material/mwc-checkbox';
 import '@material/mwc-formfield';
 import '@material/mwc-list/mwc-list';
 import '@material/mwc-list/mwc-list-item';
-import { observe } from 'mobx';
 
 class PeopleViewModel {
     @observable html: string;

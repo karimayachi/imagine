@@ -87,16 +87,16 @@ _can't I just create a reference to the viewmodel property? hmm_
 ```
 
 ### Attribute bindings
-Attribute bindings are very similar to property bindings, but are used to update attributes on the element. In many Web Components these are reflected to properties, but they also work with regular html elements.
+Attribute bindings start with `_` and are very similar to property bindings, but are used to update attributes on the element. In many Web Components these are reflected to properties, but they also work with regular html elements.
 
 ```html
-<div :id="uniqueID" :class="theme"></div>
+<div _id="uniqueID" _class="theme"></div>
 ```
 
 _todo: use Mutation Observers to create two way binding_
 
 ### Method bindings
-**not yet implemented**
+not yet implemented
 
 ### Event bindings
-**not yet implemented**
+not yet implemented

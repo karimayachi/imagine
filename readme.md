@@ -27,14 +27,38 @@ With Web Components it would also be possible to bind directly to the value-prop
 Creates a template of the children of this element, binds an array of objects or primitives to this element and repeats the template for each item in the array. The child templates are bound to the item in the array.
 
 ```html
-<ul @foreach="genres">
+<ul @foreach="genres" :selectedItem="selectedGenre">
     <li>${this}
         <a href="#" @onClick="genres.deleteGenre">delete</a>
     </li>
 </ul>
 ```
 
-It also automatically creates a Named Scope with the name of the array.
+**notes:**
+- foreach automatically creates a Named Scope with the name of the array.
+- foreach automatically creates an observable property `selectedItem` on the element that can be bound to.
+
+#### with
+The with binding creates a template of it's childnodes and hides them if the bound property is falsey (undefined, null, false, 0). If the value is not falsey, but (preferable) an object (class instance, vanille JS object, etc), the childnode-template becomes visible and bound to the object.
+
+```html
+<div @with="selectedPerson">
+    <input @value="firstname"></input>
+    <input @value="lastname"></input>
+    <input type="checkbox" _checked="retired"></input>
+</div>
+```
+
+_todo: update should update the bindings, not just replace entire content_
+
+#### html
+The html binding parses a html string and binds it's nodes to the current viewmodel / context.
+
+```html
+<div @with="currentView">
+    <div @html="htmlContent"></div>
+</div>
+```
 
 #### onClick
 _Maybe there should be generic event-binding type and click is just one of infinite possibilities. For now it is a build in._
@@ -43,18 +67,33 @@ Binds a method on the viewmodel to be triggers by the click-event occurring.
 <a href="#" @onClick="createNew">new</a>
 ```
 
-### Property / attribute bindings
-The property and attribute bindings start with `:`. If the element exposes a property by the name of the binding (in the case of a Web Component for instance), the property will be two-way bound with the property on the viewmodel. If a property by that name doesn't exist, a one-way binding with an attribute of the same name will be created.
+### Text bindings
 
-Property example:
+Text bindings use a simplified 'template literal' syntax. Use `${propertyName}` to bind a property to have it's value formatted in the text. It's equivalent to `<span @text="propertyName"></span>`
+```html
+<div>Hi there ${name}, how are you today?</div>
+```
+is equivalent to
+```html
+<div>Hi there <span @text="name"></span>, how are you today?</div>
+```
+
+### Property bindings
+The property bindings start with `:`. If the element exposes a property by the name of the binding, the property will be two-way bound with the property on the viewmodel. If a property by that name doesn't exist, an observable property will be to created to which the Viewmodel-property is bound.
+
+_can't I just create a reference to the viewmodel property? hmm_
 ```html
 <mwc-switch :checked="premiumUser"></mwc-switch>
 ```
 
-Attribtute example:
+### Attribute bindings
+Attribute bindings are very similar to property bindings, but are used to update attributes on the element. In many Web Components these are reflected to properties, but they also work with regular html elements.
+
 ```html
 <div :id="uniqueID" :class="theme"></div>
 ```
+
+_todo: use Mutation Observers to create two way binding_
 
 ### Method bindings
 **not yet implemented**

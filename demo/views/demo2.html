@@ -3,9 +3,12 @@
     <h1>Material Design Web Components</h1>
 
     <mwc-list @foreach="people" style="width: 300px" :selectedItem="selectedPerson">
-        <mwc-list-item hasMeta>
-            [${id}] ${firstname}
+        <mwc-list-item hasMeta :twoline="retired">
+            <span _style="retired ? 'color: red' : 'color: inherit'">
+                [${id}] ${firstname}
+            </span>
             <mwc-icon slot="meta" @onClick="people.delete">delete</mwc-icon>
+            <span slot="secondary">retired</span>
         </mwc-list-item>
         <li divider role="separator"></li>
     </mwc-list>

@@ -1,6 +1,5 @@
 import { BindingEngine } from './binding/bindingEngine';
 import { BindingContext } from './binding/bindingContext';
-import { getAtom, isObservableProp, isObservableArray } from 'mobx';
 
 export class Imagine {
     bindingEngine: BindingEngine;
@@ -57,57 +56,20 @@ export class Imagine {
     private bindAttributes(node: HTMLElement, vm: any) {
         /* first INIT all bindings */
         for (let index = node.attributes.length - 1; index >= 0; index--) {
-            let parsedAttribute = this.parseAttribute(node.attributes[index], vm);
-            if (parsedAttribute.bindingHandler) {
-                this.bindingEngine.bindInitPhase(parsedAttribute.bindingHandler, parsedAttribute.parameter, node, vm, node.attributes[index].value);
+            let parsedAttribute = this.bindingEngine.parseBinding(node.attributes[index].name, node.attributes[index].value, vm);
+            if (parsedAttribute) {
+                this.bindingEngine.bindInitPhase(node, parsedAttribute, vm);
             }
         }
 
         /* next UPDATE all bindings and remove attributes */
         for (let index = node.attributes.length - 1; index >= 0; index--) {
-            let parsedAttribute = this.parseAttribute(node.attributes[index], vm);
-            if (parsedAttribute.bindingHandler) {
-                this.bindingEngine.bindUpdatePhase(parsedAttribute.bindingHandler, parsedAttribute.parameter, node, vm, node.attributes[index].value);
+            let parsedAttribute = this.bindingEngine.parseBinding(node.attributes[index].name, node.attributes[index].value, vm);
+            if (parsedAttribute) {
+                this.bindingEngine.bindUpdatePhase(node, parsedAttribute, vm);
                 node.removeAttribute(node.attributes[index].name);
             }
         }
-    }
-
-    private parseAttribute(attribute: Attr, vm: any): { bindingHandler: string | null, parameter: string, observable: any } {
-        let bindingProperties: { bindingHandler: string | null, parameter: string, observable: any } = { bindingHandler: null, parameter: '', observable: null };
-        let name: string = attribute.name;
-        let value: string = attribute.value;
-
-        switch (name[0]) {
-            case '@':
-                bindingProperties.bindingHandler = name.substr(1);
-                break;
-            case ':':
-                bindingProperties.bindingHandler = '__property';
-                bindingProperties.parameter = name.substr(1);
-                break;
-            case '_':
-                bindingProperties.bindingHandler = '__attribute';
-                bindingProperties.parameter = name.substr(1);
-                break;
-        }
-
-        if(vm instanceof Object) { // vm is a viewmodel
-            if(value in vm) { // value is a property on vm
-                if(isObservableArray(vm[value])) { // value is an observable array property
-                    bindingProperties.observable = vm[value];
-                }
-                else if(isObservableProp(vm, value)) { // value is an observable property
-                    bindingProperties.observable = getAtom(vm, value);
-                }
-            }
-        }
-        else { // vm is a primitive, maybe a element in an array in a foreach binding
-            
-        }
-
-        console.log(bindingProperties);
-        return bindingProperties;
     }
 
     private bindInlinedText(node: HTMLElement, vm: any) {
@@ -121,11 +83,12 @@ export class Imagine {
 
                 let boundElement: HTMLSpanElement = document.createElement('span');
                 if (matches![i]) {
-                    let propertyName: string = matches![i].substring(2, matches![i].length - 1);
-
-                    this.bindingEngine.bindInitPhase('text', '', boundElement, vm, propertyName);
-                    this.bindingEngine.bindUpdatePhase('text', '', boundElement, vm, propertyName);
-                    newNodeList.push(boundElement);
+                    let parsedNode = this.bindingEngine.parseBinding('@text', matches![i].substring(2, matches![i].length - 1), vm);
+                    if (parsedNode) {
+                        this.bindingEngine.bindInitPhase(boundElement, parsedNode, vm);
+                        this.bindingEngine.bindUpdatePhase(boundElement, parsedNode, vm);
+                        newNodeList.push(boundElement);
+                    }
                 }
             }
 

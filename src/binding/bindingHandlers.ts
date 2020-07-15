@@ -1,6 +1,7 @@
 import { BindingContext } from './bindingContext';
 import { bind, scopes, contexts, bindingEngine } from '../index';
 import { IArraySplice, observe, observable, isObservableProp } from 'mobx';
+import { BindingProperties } from './bindingEngine';
 
 export abstract class BindingHandler {
     abstract init?(element: HTMLElement, value: any, context: BindingContext, updateValue: (value: string) => void): void;
@@ -165,8 +166,14 @@ export class ForEachHandler implements BindingHandler {
                                     innerPreventCircularUpdate = false;
                                 });
 
-                                bindingEngine.bindInitPhase('__property', 'selected', itemElement, vm, 'selected');
-                                bindingEngine.bindUpdatePhase('__property', 'selected', itemElement, vm, 'selected');
+                                let bindingProperties: BindingProperties = {
+                                    handler: '__property',
+                                    propertyName: 'selected',
+                                    bindingValue: vm.selected,
+                                    parameter: 'selected'
+                                };
+                                bindingEngine.bindInitPhase(itemElement, bindingProperties, vm);
+                                bindingEngine.bindUpdatePhase(itemElement, bindingProperties, vm);
                             }
                         }, 0);
                     }

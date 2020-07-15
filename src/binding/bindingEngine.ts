@@ -1,4 +1,4 @@
-import { isObservableProp, autorun, observe, IValueDidChange, isObservableArray, isObservable, isBoxedObservable } from 'mobx';
+import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, isBoxedObservable, getAtom } from 'mobx';
 import { BindingHandler, TextHandler, ValueHandler, OnClickHandler, ForEachHandler, AttributeHandler, WithHandler, HtmlHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { PropertyHandler } from './propertyBinding';
@@ -17,9 +17,61 @@ export class BindingEngine {
         this.scopes = new Map<string, any>();
     }
 
-    bindInitPhase = (handlerName: string, parameter: string, element: HTMLElement, vm: any, propertyName: string): void => {
-        const currentHandler: BindingHandler = BindingEngine.handlers[handlerName];
+    parseBinding = (name: string, value: string, vm: any): BindingProperties | null => {
+        let bindingProperties: BindingProperties;
 
+        let scope: any = vm;
+
+        if (value.indexOf('.') > -1) {
+            let scopeName: string = value.split('.')[0];
+            value = value.split('.')[1];
+
+            if (!this.scopes.has(scopeName)) {
+                throw (`Undefined scope: ${scopeName}`);
+            }
+            else {
+                scope = this.scopes.get(scopeName);
+            }
+        }
+
+        switch (name[0]) {
+            case '@':
+                bindingProperties = { handler: name.substr(1), parameter: '', propertyName: value, bindingValue: null }
+                break;
+            case ':':
+                bindingProperties = { handler: '__property', parameter: name.substr(1), propertyName: value, bindingValue: null }
+                break;
+            case '_':
+                bindingProperties = { handler: '__attribute', parameter: name.substr(1), propertyName: value, bindingValue: null }
+                break;
+            default:
+                return null;
+        }
+
+        if (scope instanceof Object) { // scope is an object / viewmodel
+            if (value in scope) { // value is a property on object / viewmodel
+                if (isObservableArray(scope[value])) { // value is an observable array property
+                    bindingProperties.bindingValue = scope[value];
+                }
+                else if (isObservableProp(scope, value)) { // value is an observable property
+                    bindingProperties.bindingValue = getAtom(scope, value);
+                }
+                else if (typeof scope[value] === 'function') { // value is a method on scope
+                    bindingProperties.bindingValue = scope[value];
+                }
+            }
+        }
+        else { // vm is a primitive, maybe a element in an array in a foreach binding
+            if (value === 'this') {
+                bindingProperties.bindingValue = scope;
+            }
+        }
+
+        return bindingProperties;
+    }
+
+    bindInitPhase = (element: HTMLElement, bindingProperties: BindingProperties, vm: any): void => {
+        const currentHandler: BindingHandler = BindingEngine.handlers[bindingProperties.handler];
         let contextsForElement: Map<string, BindingContext>;
 
         /* if no context list exists yet for this element, create it */
@@ -31,94 +83,74 @@ export class BindingEngine {
             contextsForElement = this.boundElements.get(element)!;
         }
 
-        let scope: any = vm;
-
-        if(propertyName.indexOf('.') > -1) {
-            let scopeName: string = propertyName.split('.')[0];
-            propertyName = propertyName.split('.')[1];
-
-            if(!this.scopes.has(scopeName)) {
-                throw(`Undefined scope: ${scopeName}`);
-            }
-            else {
-                scope = this.scopes.get(scopeName);
-            }
-        }
-
-        let propertyValue: any = propertyName === 'this' ? scope : scope[propertyName];
-
         /* if the context list for this element doesn't contain an entry for this binding(-type), create it and call INIT on the handler */
         let context: BindingContext;
-        if (!contextsForElement.has(handlerName)) {
+        if (!contextsForElement.has(bindingProperties.handler)) {
             context = new BindingContext();
             context.vm = vm;
-            context.propertyName = propertyName;
-            context.parameter = parameter;
+            context.propertyName = bindingProperties.propertyName;
+            context.parameter = bindingProperties.parameter;
 
-            contextsForElement.set(handlerName, context);
+            contextsForElement.set(bindingProperties.handler, context);
 
-            currentHandler.init?.call(this, element, propertyValue, context, (value: any): void => { // for event bindings this updateFunction should not be provided
-                if (propertyName !== 'this') {
+            currentHandler.init?.call(this, element, this.unwrap(bindingProperties.bindingValue), context, (value: any): void => { // for event bindings this updateFunction should not be provided
+                if (bindingProperties.propertyName !== 'this') {
                     context.preventCircularUpdate = true;
-                    if(isBoxedObservable(scope[propertyName])) {
-                        scope[propertyName].set(value);
+                    if (isObservable(bindingProperties.bindingValue)) {
+                        bindingProperties.bindingValue.set(value);
                     }
                     else {
-                        scope[propertyName] = value;
+                        bindingProperties.bindingValue = value;
                     }
                 }
             });
         }
     }
 
-    bindUpdatePhase = (handlerName: string, parameter: string, element: HTMLElement, vm: any, propertyName: string): void => {
-        const currentHandler: BindingHandler = BindingEngine.handlers[handlerName];
+    bindUpdatePhase = (element: HTMLElement, bindingProperties: BindingProperties, vm: any): void => {
+        const currentHandler: BindingHandler = BindingEngine.handlers[bindingProperties.handler];
         const contextsForElement: Map<string, BindingContext> = this.boundElements.get(element)!;
-        let scope: any = vm;
+        let context: BindingContext = contextsForElement.get(bindingProperties.handler)!;
 
-        if(propertyName.indexOf('.') > -1) {
-            let scopeName: string = propertyName.split('.')[0];
-            propertyName = propertyName.split('.')[1];
-
-            if(!this.scopes.has(scopeName)) {
-                throw(`Undefined scope: ${scopeName}`);
-            }
-            else {
-                scope = this.scopes.get(scopeName);
-            }
+        if(!currentHandler.update) { // this binding has no updater
+            return;
         }
 
-        let propertyValue: any = propertyName === 'this' ? scope : scope[propertyName];
-        let context: BindingContext = contextsForElement.get(handlerName)!;
+        const updateFunction = (change?: IValueDidChange<any>) => {
+            let propertyValue: any = this.unwrap(bindingProperties.bindingValue);
 
-        if ((isObservable(scope[propertyName]) || isObservableProp(scope, propertyName)) && currentHandler.update) {
-            const updateFunction = (change?: IValueDidChange<any>) => {
-                if (!context.preventCircularUpdate) {
-                    if(isBoxedObservable(scope[propertyName])) {
-                        currentHandler.update!(element, scope[propertyName].get(), context, change);
-                    }
-                    else {
-                        currentHandler.update!(element, scope[propertyName], context, change);
-                    }
-                }
-
-                context.preventCircularUpdate = false;
-            };
-
-            if (isBoxedObservable(scope[propertyName]) || isObservableArray(vm[propertyName])) {
-                observe(scope[propertyName], updateFunction);
+            if (!context.preventCircularUpdate) {
+                currentHandler.update!(element, propertyValue, context, change);
             }
-            else {
-                observe(scope, propertyName, updateFunction);
-            }
+
+            context.preventCircularUpdate = false;
+        };
+
+        if (isObservable(bindingProperties.bindingValue)) {
+            observe(bindingProperties.bindingValue, updateFunction);
+        }
             
-            updateFunction();
+        updateFunction();
+    }
+
+    private unwrap(property: any): any {
+        if(isObservableArray(property) || !isObservable(property)) {
+            return property;
         }
-        else if (currentHandler.update) {
-            currentHandler.update(element, propertyValue, context);
+        else {
+            return property.get();
         }
     }
 }
+
+
+export interface BindingProperties {
+    handler: string,
+    parameter: string,
+    propertyName: string,
+    bindingValue: any
+}
+
 
 BindingEngine.handlers['text'] = new TextHandler();
 BindingEngine.handlers['value'] = new ValueHandler();

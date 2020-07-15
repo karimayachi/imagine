@@ -28,7 +28,8 @@ Creates a template of the children of this element, binds an array of objects or
 
 ```html
 <ul @foreach="genres" :selectedItem="selectedGenre">
-    <li>${this}
+    <li>
+        ${this}
         <a href="#" @onClick="genres.deleteGenre">delete</a>
     </li>
 </ul>

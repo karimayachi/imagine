@@ -1,4 +1,4 @@
-import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, isBoxedObservable, getAtom } from 'mobx';
+import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue } from 'mobx';
 import { BindingHandler, TextHandler, ValueHandler, OnClickHandler, ForEachHandler, AttributeHandler, WithHandler, HtmlHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { PropertyHandler } from './propertyBinding';
@@ -60,6 +60,33 @@ export class BindingEngine {
                     bindingProperties.bindingValue = scope[value];
                 }
             }
+            else { // try parse the value as a string
+                const regex: RegExp = /(\w+)\s*\?\s*\'([\w\s:!+=]+)'\s*:\s*'([\w\s:!+=]+)'/gm; // regex for ternary operator 
+                if(value.match(regex)) {
+                    let parts: RegExpExecArray = regex.exec(value)!;
+                    let propertyName: string = parts[1];
+
+                    if(propertyName in scope) {
+                        let bindingValue: IComputedValue<string> = computed((): string => {
+                            if(scope[propertyName]) {
+                                return parts[2];
+                            }
+                            else {
+                                return parts[3];
+                            }
+                        });
+
+                        bindingProperties.propertyName = propertyName;
+                        bindingProperties.bindingValue = bindingValue;
+                    }
+                    else {
+                        return null;
+                    }
+                }
+                else {
+                    return null;
+                }
+            }
         }
         else { // vm is a primitive, maybe a element in an array in a foreach binding
             if (value === 'this') {
@@ -67,6 +94,7 @@ export class BindingEngine {
             }
         }
 
+        //console.log(bindingProperties);
         return bindingProperties;
     }
 

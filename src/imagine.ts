@@ -1,4 +1,4 @@
-import { BindingEngine } from './binding/bindingEngine';
+import { BindingEngine, BindingProperties } from './binding/bindingEngine';
 import { BindingContext } from './binding/bindingContext';
 
 export class Imagine {
@@ -54,28 +54,30 @@ export class Imagine {
     }
 
     private bindAttributes(node: HTMLElement, vm: any) {
-        /* first INIT all bindings */
+        let allAttributes: BindingProperties[] = [];
         for (let index = node.attributes.length - 1; index >= 0; index--) {
             let parsedAttribute = this.bindingEngine.parseBinding(node.attributes[index].name, node.attributes[index].value, vm);
             if (parsedAttribute) {
-                this.bindingEngine.bindInitPhase(node, parsedAttribute, vm);
+                allAttributes.push(parsedAttribute);
+                node.removeAttribute(node.attributes[index].name);
             }
         }
 
+        /* first INIT all bindings */
+        for (let parsedAttribute of allAttributes) {
+            this.bindingEngine.bindInitPhase(node, parsedAttribute, vm);
+        }
+
         /* next UPDATE all bindings and remove attributes */
-        for (let index = node.attributes.length - 1; index >= 0; index--) {
-            let parsedAttribute = this.bindingEngine.parseBinding(node.attributes[index].name, node.attributes[index].value, vm);
-            if (parsedAttribute) {
-                this.bindingEngine.bindUpdatePhase(node, parsedAttribute, vm);
-                node.removeAttribute(node.attributes[index].name);
-            }
+        for (let parsedAttribute of allAttributes) {
+            this.bindingEngine.bindUpdatePhase(node, parsedAttribute, vm);
         }
     }
 
     private bindInlinedText(node: HTMLElement, vm: any) {
-        if (/\${[a-zA-Z]*}/.test(node.textContent!)) {
-            let stringParts: string[] = node.textContent!.split(/\${[a-zA-Z]*}/);
-            let matches: RegExpMatchArray | null = node.textContent!.match(/\${[a-zA-Z]*}/gm);
+        if (/\${[a-zA-Z']*}/.test(node.textContent!)) {
+            let stringParts: string[] = node.textContent!.split(/\${[a-zA-Z']*}/);
+            let matches: RegExpMatchArray | null = node.textContent!.match(/\${[a-zA-Z']*}/gm);
             let newNodeList: Node[] = [];
 
             for (let i = 0; i < stringParts.length; i++) {

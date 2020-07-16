@@ -113,13 +113,15 @@ export class BindingEngine {
 
         /* if the context list for this element doesn't contain an entry for this binding(-type), create it and call INIT on the handler */
         let context: BindingContext;
-        if (!contextsForElement.has(bindingProperties.handler)) {
+        let contextIdentifier: string = `${bindingProperties.handler}:${bindingProperties.parameter}`; /* use a Symbol? Don't really see the need */
+
+        if (!contextsForElement.has(contextIdentifier)) {
             context = new BindingContext();
             context.vm = vm;
             context.propertyName = bindingProperties.propertyName;
             context.parameter = bindingProperties.parameter;
 
-            contextsForElement.set(bindingProperties.handler, context);
+            contextsForElement.set(contextIdentifier, context);
 
             currentHandler.init?.call(this, element, this.unwrap(bindingProperties.bindingValue), context, (value: any): void => { // for event bindings this updateFunction should not be provided
                 if (bindingProperties.propertyName !== 'this') {
@@ -138,7 +140,8 @@ export class BindingEngine {
     bindUpdatePhase = (element: HTMLElement, bindingProperties: BindingProperties, vm: any): void => {
         const currentHandler: BindingHandler = BindingEngine.handlers[bindingProperties.handler];
         const contextsForElement: Map<string, BindingContext> = this.boundElements.get(element)!;
-        let context: BindingContext = contextsForElement.get(bindingProperties.handler)!;
+        let contextIdentifier: string = `${bindingProperties.handler}:${bindingProperties.parameter}`;
+        let context: BindingContext = contextsForElement.get(contextIdentifier)!;
 
         if(!currentHandler.update) { // this binding has no updater
             return;

@@ -27,7 +27,7 @@ export class PropertyHandler implements BindingHandler {
             else {
                 let closureValue: any = observable.box();
                 let newProperties: object = {};
-
+                
                 Object.defineProperty(newProperties, propertyName, {
                     enumerable: true,
                     configurable: true,

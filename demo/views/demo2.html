@@ -7,13 +7,13 @@
             <span _style="retired ? 'color: red' : 'color: inherit'">
                 [${id}] ${firstname}
             </span>
-            <mwc-icon slot="meta" @onClick="people.delete">delete</mwc-icon>
+            <mwc-icon slot="meta" #click="people.delete">delete</mwc-icon>
             <span slot="secondary">retired</span>
         </mwc-list-item>
         <li divider role="separator"></li>
     </mwc-list>
 
-    <mwc-button @onClick="add">Add</mwc-button>
+    <mwc-button #click="add">Add</mwc-button>
 
     <div style="margin: 40px 0px 150px;">
         <mwc-select label="People" @foreach="people" :selectedItem="selectedPerson" style="margin-bottom: 20px;">

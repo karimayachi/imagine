@@ -26,11 +26,11 @@ export class ValueHandler implements BindingHandler {
     }
 }
 
-export class OnClickHandler implements BindingHandler {
-    init(element: HTMLElement, property: Function, context: BindingContext): void {
-        if (typeof property === 'function') {
-            (<HTMLInputElement>element).addEventListener('click', (): void => {
-                property(context.vm);
+export class EventHandler implements BindingHandler {
+    init(element: HTMLElement, value: any, context: BindingContext): void {
+        if (typeof value === 'function') {
+            (<HTMLInputElement>element).addEventListener(context.parameter!, (event: Event): void => {
+                value(context.vm, event);
             });
         }
     }

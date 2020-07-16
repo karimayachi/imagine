@@ -1,5 +1,5 @@
 import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue } from 'mobx';
-import { BindingHandler, TextHandler, ValueHandler, OnClickHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler } from './bindingHandlers';
+import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { PropertyHandler } from './propertyBinding';
 
@@ -44,6 +44,9 @@ export class BindingEngine {
             case '_':
                 bindingProperties = { handler: '__attribute', parameter: name.substr(1), propertyName: value, bindingValue: null }
                 break;
+            case '#':
+                bindingProperties = { handler: '__event', parameter: name.substr(1), propertyName: value, bindingValue: null }
+                break;
             default:
                 return null;
         }
@@ -62,13 +65,13 @@ export class BindingEngine {
             }
             else { // try parse the value as a string
                 const regex: RegExp = /(\w+)\s*\?\s*\'([\w\s:!+=]+)'\s*:\s*'([\w\s:!+=]+)'/gm; // regex for ternary operator 
-                if(value.match(regex)) {
+                if (value.match(regex)) {
                     let parts: RegExpExecArray = regex.exec(value)!;
                     let propertyName: string = parts[1];
 
-                    if(propertyName in scope) {
+                    if (propertyName in scope) {
                         let bindingValue: IComputedValue<string> = computed((): string => {
-                            if(scope[propertyName]) {
+                            if (scope[propertyName]) {
                                 return parts[2];
                             }
                             else {
@@ -94,7 +97,7 @@ export class BindingEngine {
             }
         }
 
-        //console.log(bindingProperties);
+        console.log(bindingProperties);
         return bindingProperties;
     }
 
@@ -143,7 +146,7 @@ export class BindingEngine {
         let contextIdentifier: string = `${bindingProperties.handler}:${bindingProperties.parameter}`;
         let context: BindingContext = contextsForElement.get(contextIdentifier)!;
 
-        if(!currentHandler.update) { // this binding has no updater
+        if (!currentHandler.update) { // this binding has no updater
             return;
         }
 
@@ -160,12 +163,12 @@ export class BindingEngine {
         if (isObservable(bindingProperties.bindingValue)) {
             observe(bindingProperties.bindingValue, updateFunction);
         }
-            
+
         updateFunction();
     }
 
     private unwrap(property: any): any {
-        if(isObservableArray(property) || !isObservable(property)) {
+        if (isObservableArray(property) || !isObservable(property)) {
             return property;
         }
         else {
@@ -191,5 +194,4 @@ BindingEngine.handlers['html'] = new HtmlHandler();
 
 BindingEngine.handlers['__attribute'] = new AttributeHandler();
 BindingEngine.handlers['__property'] = new PropertyHandler();
-
-BindingEngine.handlers['onclick'] = new OnClickHandler();
+BindingEngine.handlers['__event'] = new EventHandler();

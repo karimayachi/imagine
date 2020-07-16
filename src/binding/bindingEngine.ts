@@ -1,5 +1,5 @@
 import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue } from 'mobx';
-import { BindingHandler, TextHandler, ValueHandler, OnClickHandler, ForEachHandler, AttributeHandler, WithHandler, HtmlHandler } from './bindingHandlers';
+import { BindingHandler, TextHandler, ValueHandler, OnClickHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { PropertyHandler } from './propertyBinding';
 
@@ -186,7 +186,7 @@ export interface BindingProperties {
 BindingEngine.handlers['text'] = new TextHandler();
 BindingEngine.handlers['value'] = new ValueHandler();
 BindingEngine.handlers['foreach'] = new ForEachHandler();
-BindingEngine.handlers['with'] = new WithHandler();
+BindingEngine.handlers['context'] = new ContextHandler();
 BindingEngine.handlers['html'] = new HtmlHandler();
 
 BindingEngine.handlers['__attribute'] = new AttributeHandler();

@@ -20,7 +20,7 @@
             <mwc-list-item value="dummy">${firstname}</mwc-list-item>
         </mwc-select>
 
-        <div @with="selectedPerson">
+        <div @context="selectedPerson">
             <mwc-textfield label="Firstname" :value="firstname"></mwc-textfield>
             <mwc-textfield label="Lastname" :value="lastname"></mwc-textfield>
             <mwc-formfield label="Retired">

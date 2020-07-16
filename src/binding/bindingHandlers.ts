@@ -42,7 +42,7 @@ export class AttributeHandler implements BindingHandler {
     }
 }
 
-export class WithHandler implements BindingHandler {
+export class ContextHandler implements BindingHandler {
     init(element: HTMLElement, _value: any, context: BindingContext, _updateValue: (value: string) => void): void {
         let template: DocumentFragment = document.createDocumentFragment();
 

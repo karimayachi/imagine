@@ -20,20 +20,6 @@ export class BindingEngine {
     parseBinding = (name: string, value: string, vm: any): BindingProperties | null => {
         let bindingProperties: BindingProperties;
 
-        let scope: any = vm;
-
-        if (value.indexOf('.') > -1) {
-            let scopeName: string = value.split('.')[0];
-            value = value.split('.')[1];
-
-            if (!this.scopes.has(scopeName)) {
-                throw (`Undefined scope: ${scopeName}`);
-            }
-            else {
-                scope = this.scopes.get(scopeName);
-            }
-        }
-
         switch (name[0]) {
             case '@':
                 bindingProperties = { handler: name.substr(1), parameter: '', propertyName: value, bindingValue: null }
@@ -49,6 +35,20 @@ export class BindingEngine {
                 break;
             default:
                 return null;
+        }
+
+        let scope: any = vm;
+
+        if (value.indexOf('.') > -1) {
+            let scopeName: string = value.split('.')[0];
+            value = value.split('.')[1];
+
+            if (!this.scopes.has(scopeName)) {
+                throw (`Undefined scope: ${scopeName}`);
+            }
+            else {
+                scope = this.scopes.get(scopeName);
+            }
         }
 
         if (scope instanceof Object) { // scope is an object / viewmodel

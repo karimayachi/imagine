@@ -1,4 +1,4 @@
-import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue } from 'mobx';
+import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue, observable, IObjectDidChange } from 'mobx';
 import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { PropertyHandler } from './propertyBinding';
@@ -97,7 +97,7 @@ export class BindingEngine {
             }
         }
 
-        console.log(bindingProperties);
+        //console.log(bindingProperties);
         return bindingProperties;
     }
 
@@ -150,7 +150,7 @@ export class BindingEngine {
             return;
         }
 
-        const updateFunction = (change?: IValueDidChange<any>) => {
+        const updateFunction = (change?: IValueDidChange<any> | IObjectDidChange) => {
             let propertyValue: any = this.unwrap(bindingProperties.bindingValue);
 
             if (!context.preventCircularUpdate) {
@@ -161,7 +161,14 @@ export class BindingEngine {
         };
 
         if (isObservable(bindingProperties.bindingValue)) {
-            observe(bindingProperties.bindingValue, updateFunction);
+            if(isObservableArray(bindingProperties.bindingValue)) { /* not only observe the array contents, but also replacing the array */
+                observe(context.vm, bindingProperties.propertyName, (change: IValueDidChange<any>): void => {
+                    updateFunction(change);
+                    observe(context.vm[bindingProperties.propertyName], updateFunction); /* observe the new array */
+                });
+            }
+
+            observe(bindingProperties.bindingValue, updateFunction); /* primitives, objects and content of arrays */
         }
 
         updateFunction();

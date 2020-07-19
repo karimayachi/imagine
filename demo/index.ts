@@ -80,6 +80,10 @@ class MainViewModel {
         });
     }
 
+    replace = (): void => {
+        this.genres = ['New Wave', 'Post-punk'];
+    }
+
     addGenre = (): void => {
         const genres: string[] = ['Hip Hop', 'Reggae', 'Punk', '80s', 'Pop'];
         this.genres.push(genres[Math.floor(Math.random() * genres.length)]);

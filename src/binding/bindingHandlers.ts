@@ -1,7 +1,8 @@
 import { BindingContext } from './bindingContext';
 import { bind, scopes, contexts, bindingEngine } from '../index';
-import { IArraySplice, observe, observable, isObservableProp } from 'mobx';
+import { IArraySplice, observe, observable, isObservableProp, IArrayChange } from 'mobx';
 import { BindingProperties } from './bindingEngine';
+import { changeDependenciesStateTo0 } from 'mobx/lib/internal';
 
 export abstract class BindingHandler {
     abstract init?(element: HTMLElement, value: any, context: BindingContext, updateValue: (value: string) => void): void;
@@ -96,8 +97,8 @@ export class ForEachHandler implements BindingHandler {
         context.template = template;
     }
 
-    update(element: HTMLElement, value: any, context: BindingContext, change: IArraySplice<any>): void {
-        if (change) {
+    update(element: HTMLElement, value: any, context: BindingContext, change: IArraySplice<any> | IArrayChange): void {
+        if (change && change.type === 'splice') {
             for (let item of change.added) {
                 addItem(item);
             }
@@ -112,6 +113,13 @@ export class ForEachHandler implements BindingHandler {
                         }
                     }
                 }
+            }
+        }
+        else if(change && change.type === 'update') {
+            element.innerHTML = ''; /* TODO: does this sufficiently trigger GC? do the bindings disappear from the weakmap AND underlying map? */
+
+            for (let item of change.newValue) {
+                addItem(item);
             }
         }
         else {

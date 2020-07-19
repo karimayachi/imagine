@@ -53,11 +53,13 @@ class MainViewModel {
     @observable genres: string[];
     @observable isDraggable: boolean;
     @observable happyIcon: string;
+    @observable seen: boolean;
     @observable selectedVM?: PeopleViewModel;
 
     constructor() {
         this.name = 'Karim';
         this.age = 41;
+        this.seen = true;
         this.genres = ['Hip Hop'];
         this.isDraggable = true;
         this.happyIcon = 'edit';
@@ -68,6 +70,7 @@ class MainViewModel {
         this.age = 41;
         this.isDraggable = false;
         this.happyIcon = 'shopping_cart';
+        this.seen = !this.seen;
     }
 
     showPeopleView = (): void => {

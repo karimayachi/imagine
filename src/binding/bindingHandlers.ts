@@ -15,6 +15,18 @@ export class TextHandler implements BindingHandler {
     }
 }
 
+export class VisibleHandler implements BindingHandler {
+    initialValue?: string;
+
+    init = (element: HTMLElement): void => {
+        this.initialValue = getComputedStyle(element).display;
+    }
+
+    update = (element: HTMLElement, value: string): void => {
+        element.style.display = value ? this.initialValue! : 'none';
+    }
+}
+
 export class ValueHandler implements BindingHandler {
     init(element: HTMLElement, _value: any, _contex: BindingContext, updateValue: (value: string) => void): void {
         (<HTMLInputElement>element).addEventListener('input', (): void => {

@@ -1,5 +1,5 @@
 import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue, observable, IObjectDidChange } from 'mobx';
-import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler } from './bindingHandlers';
+import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler, VisibleHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { PropertyHandler } from './propertyBinding';
 
@@ -86,6 +86,12 @@ export class BindingEngine {
                         return null;
                     }
                 }
+                else if (value[0] == '!') { // simplified negation
+                    let bindingValue: IComputedValue<boolean> = computed((): boolean => !scope[value.substr(1)]);
+
+                    bindingProperties.propertyName = value.substr(1);
+                    bindingProperties.bindingValue = bindingValue;
+                }
                 else {
                     return null;
                 }
@@ -161,7 +167,7 @@ export class BindingEngine {
         };
 
         if (isObservable(bindingProperties.bindingValue)) {
-            if(isObservableArray(bindingProperties.bindingValue)) { /* not only observe the array contents, but also replacing the array */
+            if (isObservableArray(bindingProperties.bindingValue)) { /* not only observe the array contents, but also replacing the array */
                 observe(context.vm, bindingProperties.propertyName, (change: IValueDidChange<any>): void => {
                     updateFunction(change);
                     observe(context.vm[bindingProperties.propertyName], updateFunction); /* observe the new array */
@@ -198,6 +204,7 @@ BindingEngine.handlers['value'] = new ValueHandler();
 BindingEngine.handlers['foreach'] = new ForEachHandler();
 BindingEngine.handlers['context'] = new ContextHandler();
 BindingEngine.handlers['html'] = new HtmlHandler();
+BindingEngine.handlers['visible'] = new VisibleHandler();
 
 BindingEngine.handlers['__attribute'] = new AttributeHandler();
 BindingEngine.handlers['__property'] = new PropertyHandler();

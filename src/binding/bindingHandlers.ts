@@ -16,7 +16,8 @@ export class TextHandler implements BindingHandler {
 }
 
 export class VisibleHandler implements BindingHandler {
-    initialValue?: string;
+    initialValue?: string; /* TERRIBLE MISTAKE!!! there's only one instance of this class, used by all bindings. So this value will be overwritten.
+                              TODO: either change this into a WeakMap with references per element, or move this as a parameter to the binding context */
 
     init = (element: HTMLElement): void => {
         this.initialValue = getComputedStyle(element).display;

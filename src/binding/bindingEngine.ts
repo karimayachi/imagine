@@ -98,17 +98,17 @@ export class BindingEngine {
 
                     let bindingValue: IComputedValue<string> = computed((): string => {
                         let concatenatedString: string = '';
-                        let stringRegex: RegExp = /^'(\w+)'$/gm;
+                        let stringRegex: RegExp = /^'([\w#/]+)'$/gm;
 
                         for(let i=0; i < elements.length; i++){
                             if(elements[i] in scope) {
                                 concatenatedString += scope[elements[i]];
                             }
                             else if(elements[i].match(stringRegex)) {
-                                concatenatedString = stringRegex.exec(elements[i])![1];
+                                concatenatedString += stringRegex.exec(elements[i])![1];
                             }
                         }
-
+                        
                         return concatenatedString;
                     });
 

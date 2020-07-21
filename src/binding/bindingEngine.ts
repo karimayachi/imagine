@@ -92,6 +92,29 @@ export class BindingEngine {
                     bindingProperties.propertyName = value.substr(1);
                     bindingProperties.bindingValue = bindingValue;
                 }
+                else if (value.indexOf('+') > 0) { // simple concatenation
+                    let elements: string[] = value.split('+');
+                    elements = elements.map(item => item.trim());
+
+                    let bindingValue: IComputedValue<string> = computed((): string => {
+                        let concatenatedString: string = '';
+                        let stringRegex: RegExp = /^'(\w+)'$/gm;
+
+                        for(let i=0; i < elements.length; i++){
+                            if(elements[i] in scope) {
+                                concatenatedString += scope[elements[i]];
+                            }
+                            else if(elements[i].match(stringRegex)) {
+                                concatenatedString = stringRegex.exec(elements[i])![1];
+                            }
+                        }
+
+                        return concatenatedString;
+                    });
+
+                    bindingProperties.propertyName = value.substr(1);
+                    bindingProperties.bindingValue = bindingValue;
+                }
                 else {
                     return null;
                 }

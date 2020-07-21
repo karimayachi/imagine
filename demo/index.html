@@ -15,7 +15,7 @@
 
         <div @visible="!seen">You ain't seen me right?</div>
 
-        <div _draggable="isDraggable">
+        <div _draggable="isDraggable" _id="'drag_' + name">
             It seems your age is ${age} and your favorite genres of music are:
 
             <mwc-list @foreach="genres" style="width: 300px">

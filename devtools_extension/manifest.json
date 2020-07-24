@@ -1,6 +1,6 @@
 {
-    "name": "Hello Extensions",
-    "description": "Base Level Extension",
+    "name": "Imagine Debugger",
+    "description": "Deep dive into the bindings of Imagine",
     "version": "1.0",
     "manifest_version": 2,
     "devtools_page": "devtools.html"

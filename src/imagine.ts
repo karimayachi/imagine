@@ -79,9 +79,10 @@ export class Imagine {
     }
 
     private bindInlinedText(node: HTMLElement, vm: any) {
-        if (/\${[a-zA-Z']*}/.test(node.textContent!)) {
-            let stringParts: string[] = node.textContent!.split(/\${[a-zA-Z']*}/);
-            let matches: RegExpMatchArray | null = node.textContent!.match(/\${[a-zA-Z']*}/gm);
+        let templateLiteralRegEx: RegExp = /\${[a-zA-Z.']*}/gm;
+        if (templateLiteralRegEx.test(node.textContent!)) {
+            let stringParts: string[] = node.textContent!.split(templateLiteralRegEx);
+            let matches: RegExpMatchArray | null = node.textContent!.match(templateLiteralRegEx);
             let newNodeList: Node[] = [];
 
             for (let i = 0; i < stringParts.length; i++) {

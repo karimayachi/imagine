@@ -2,7 +2,6 @@ import { BindingContext } from './bindingContext';
 import { bind, scopes, contexts, bindingEngine } from '../index';
 import { IArraySplice, observe, observable, isObservableProp, IArrayChange } from 'mobx';
 import { BindingProperties } from './bindingEngine';
-import { changeDependenciesStateTo0 } from 'mobx/lib/internal';
 
 export abstract class BindingHandler {
     abstract init?(element: HTMLElement, value: any, context: BindingContext, updateValue: (value: string) => void): void;

@@ -22,7 +22,12 @@ export class BindingEngine {
 
         switch (name[0]) {
             case '@':
-                bindingProperties = { handler: name.substr(1), parameter: '', propertyName: value, bindingValue: null }
+                if(BindingEngine.handlers[name.substr(1)]) {
+                    bindingProperties = { handler: name.substr(1), parameter: '', propertyName: value, bindingValue: null }
+                }
+                else {
+                    throw(`Unknown binding '${name.substr(1)}'`);
+                }
                 break;
             case ':':
                 bindingProperties = { handler: '__property', parameter: name.substr(1), propertyName: value, bindingValue: null }
@@ -37,97 +42,140 @@ export class BindingEngine {
                 return null;
         }
 
-        let scope: any = vm;
+        /* Parse the passed value. It can be
+         * - primitive (<namespace.>propertyName or 'this'). I.e. person, person.firstName, this, someNamedScope.this, someNamedScope.getNames
+         * - a ternary conditional (<namespace.>propertyName ? '<string>' : '<string>'). I.e. person.isRetired ? 'retired' : 'still working'
+         * - negation (!<namespace.>propertyName). I.e. !person.isRetired, !showMenu
+         * - concatenation (<namespace.>propertyName + '<string>' + ...) I.e. 'https://url.com/' + person.personalPage, better to use template literals
+         */
+        let primitiveRegEx: RegExp = /^[\w.]+$/gm;
+        let ternaryRegEx: RegExp = /(\w+)\s*\?\s*\'([\w\s:!+=]+)'\s*:\s*'([\w\s:!+=]+)'/gm;
 
-        if (value.indexOf('.') > -1) {
-            let scopeName: string = value.split('.')[0];
-            value = value.split('.')[1];
+        if (value.match(primitiveRegEx)) { // primitive
+            let { propertyName, scope } = this.recursiveResolveScope(vm, value);
 
-            if (!this.scopes.has(scopeName)) {
-                throw (`Undefined scope: ${scopeName}`);
-            }
-            else {
-                scope = this.scopes.get(scopeName);
-            }
-        }
-
-        if (scope instanceof Object) { // scope is an object / viewmodel
-            if (value in scope) { // value is a property on object / viewmodel
-                if (isObservableArray(scope[value])) { // value is an observable array property
-                    bindingProperties.bindingValue = scope[value];
-                }
-                else if (isObservableProp(scope, value)) { // value is an observable property
-                    bindingProperties.bindingValue = getAtom(scope, value);
-                }
-                else if (typeof scope[value] === 'function') { // value is a method on scope
-                    bindingProperties.bindingValue = scope[value];
-                }
-            }
-            else { // try parse the value as a string
-                const regex: RegExp = /(\w+)\s*\?\s*\'([\w\s:!+=]+)'\s*:\s*'([\w\s:!+=]+)'/gm; // regex for ternary operator 
-                if (value.match(regex)) {
-                    let parts: RegExpExecArray = regex.exec(value)!;
-                    let propertyName: string = parts[1];
-
-                    if (propertyName in scope) {
-                        let bindingValue: IComputedValue<string> = computed((): string => {
-                            if (scope[propertyName]) {
-                                return parts[2];
-                            }
-                            else {
-                                return parts[3];
-                            }
-                        });
-
-                        bindingProperties.propertyName = propertyName;
-                        bindingProperties.bindingValue = bindingValue;
-                    }
-                    else {
-                        return null;
-                    }
-                }
-                else if (value[0] == '!') { // simplified negation
-                    let bindingValue: IComputedValue<boolean> = computed((): boolean => !scope[value.substr(1)]);
-
-                    bindingProperties.propertyName = value.substr(1);
-                    bindingProperties.bindingValue = bindingValue;
-                }
-                else if (value.indexOf('+') > 0) { // simple concatenation
-                    let elements: string[] = value.split('+');
-                    elements = elements.map(item => item.trim());
-
-                    let bindingValue: IComputedValue<string> = computed((): string => {
-                        let concatenatedString: string = '';
-                        let stringRegex: RegExp = /^'([\w#/]+)'$/gm;
-
-                        for(let i=0; i < elements.length; i++){
-                            if(elements[i] in scope) {
-                                concatenatedString += scope[elements[i]];
-                            }
-                            else if(elements[i].match(stringRegex)) {
-                                concatenatedString += stringRegex.exec(elements[i])![1];
-                            }
-                        }
-                        
-                        return concatenatedString;
-                    });
-
-                    bindingProperties.propertyName = value.substr(1);
-                    bindingProperties.bindingValue = bindingValue;
-                }
-                else {
-                    return null;
-                }
-            }
-        }
-        else { // vm is a primitive, maybe a element in an array in a foreach binding
-            if (value === 'this') {
+            if (propertyName === 'this') {
                 bindingProperties.bindingValue = scope;
             }
+            else if (scope instanceof Object) { // scope is an object / viewmodel
+                if (propertyName in scope) { // value is a property on object / viewmodel
+                    if (isObservableArray(scope[propertyName])) { // value is an observable array property
+                        bindingProperties.bindingValue = scope[propertyName];
+                    }
+                    else if (isObservableProp(scope, propertyName)) { // value is an observable property
+                        bindingProperties.bindingValue = getAtom(scope, propertyName);
+                    }
+                    else if (typeof scope[propertyName] === 'function') { // value is a method on scope
+                        bindingProperties.bindingValue = scope[propertyName];
+                    }
+                }
+            }
+        }
+        else if (value.match(ternaryRegEx)) { // ternary conditional
+            let parts: RegExpExecArray = ternaryRegEx.exec(value)!;
+            let conditional: string = parts[1];
+            let { propertyName, scope } = this.recursiveResolveScope(vm, conditional);
+
+            /* in theory, you could use 'this' here if you're in a foreach iterating over an array of observable booleans
+             * but I'm not going down that rabbit hole
+             */
+
+            if (propertyName in scope) {
+                let bindingValue: IComputedValue<string> = computed((): string => {
+                    if (scope[propertyName]) {
+                        return parts[2];
+                    }
+                    else {
+                        return parts[3];
+                    }
+                });
+
+                bindingProperties.propertyName = propertyName;
+                bindingProperties.bindingValue = bindingValue;
+            }
+            else {
+                return null;
+            }
+        }
+        else if (value[0] == '!') { // simplified negation
+            let { propertyName, scope } = this.recursiveResolveScope(vm, value.substr(1));
+            let bindingValue: IComputedValue<boolean> = computed((): boolean => !scope[propertyName]);
+
+            bindingProperties.propertyName = propertyName;
+            bindingProperties.bindingValue = bindingValue;
+        }
+        else if (value.indexOf('+') > 0) { // simple concatenation
+            let elements: string[] = value.split('+');
+            elements = elements.map(item => item.trim());
+
+            let bindingValue: IComputedValue<string> = computed((): string => {
+                let concatenatedString: string = '';
+                let stringRegex: RegExp = /^'([\w#/]+)'$/gm;
+
+                for (let i = 0; i < elements.length; i++) {
+                    if (elements[i].match(stringRegex)) {
+                        concatenatedString += stringRegex.exec(elements[i])![1];
+                    }
+                    else {
+                        let { propertyName, scope } = this.recursiveResolveScope(vm, elements[i]);
+
+                        if (propertyName in scope) {
+                            concatenatedString += scope[propertyName];
+                        }
+                    }
+                }
+
+                return concatenatedString;
+            });
+
+            bindingProperties.propertyName = value.substr(1);
+            bindingProperties.bindingValue = bindingValue;
         }
 
-        //console.log(bindingProperties);
+        console.log(bindingProperties);
         return bindingProperties;
+    }
+
+    private recursiveResolveScope(currentScope: any, namespace: string): { propertyName: string, scope: any } {
+        let levels: string[] = namespace.split('.');
+        let scope: any = currentScope;
+
+        switch (levels.length) {
+            case 1: // current level, no namespace
+                if (levels[0] === 'this' || levels[0] in currentScope) {
+                    console.log('RESOLVED NAMESPACE', { propertyName: levels[0], scope: scope })
+                    return { propertyName: levels[0], scope: scope };
+                }
+                throw (`Undefined property: ${levels[0]}`);
+            case 2: // one level of namespacing
+                if (this.scopes.has(levels[0])) {
+                    scope = this.scopes.get(levels[0]);
+                }
+                else if (levels[0] in currentScope) {
+                    scope = currentScope[levels[0]];
+                }
+                else {
+                    throw (`Undefined scope: ${levels[0]}`);
+                }
+
+                if (levels[1] in scope) {
+                    console.log('RESOLVED NAMESPACE', { propertyName: levels[1], scope: scope })
+                    return { propertyName: levels[1], scope: scope };
+                }
+                throw (`Undefined property: ${levels[1]}`);
+            default: // more levels, parse the lowest and go into recursion
+                if (this.scopes.has(levels[0])) {
+                    scope = this.scopes.get(levels[0]);
+                }
+                else if (levels[0] in currentScope) {
+                    scope = currentScope[levels[0]];
+                }
+                else {
+                    throw (`Undefined scope: ${levels[0]}`);
+                }
+
+                return this.recursiveResolveScope(scope, levels.slice(1).join('.'));
+        }
     }
 
     bindInitPhase = (element: HTMLElement, bindingProperties: BindingProperties, vm: any): void => {

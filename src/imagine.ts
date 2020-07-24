@@ -8,7 +8,11 @@ export class Imagine {
         this.bindingEngine = new BindingEngine();
     }
 
-    bind = (element: HTMLElement | DocumentFragment | null, vm: any): void => {
+    bind = (element: HTMLElement | DocumentFragment | null, vm: any, debug?: boolean): void => {
+        if(debug) {
+            (<any>window).__debug_imagine = this;
+        }
+
         element = element || document.getElementsByTagName('body')[0];
 
         /* if this is a documentFragment assume a template ->

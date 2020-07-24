@@ -145,7 +145,7 @@ export class BindingEngine {
 
         /* if the context list for this element doesn't contain an entry for this binding(-type), create it and call INIT on the handler */
         let context: BindingContext;
-        let contextIdentifier: string = `${bindingProperties.handler}:${bindingProperties.parameter}`; /* use a Symbol? Don't really see the need */
+        let contextIdentifier: string = `${bindingProperties.handler}${bindingProperties.parameter ? ':' + bindingProperties.parameter : ''}`; /* use a Symbol? Don't really see the need */
 
         if (!contextsForElement.has(contextIdentifier)) {
             context = new BindingContext();
@@ -172,7 +172,7 @@ export class BindingEngine {
     bindUpdatePhase = (element: HTMLElement, bindingProperties: BindingProperties, vm: any): void => {
         const currentHandler: BindingHandler = BindingEngine.handlers[bindingProperties.handler];
         const contextsForElement: Map<string, BindingContext> = this.boundElements.get(element)!;
-        let contextIdentifier: string = `${bindingProperties.handler}:${bindingProperties.parameter}`;
+        let contextIdentifier: string = `${bindingProperties.handler}${bindingProperties.parameter ? ':' + bindingProperties.parameter : ''}`;
         let context: BindingContext = contextsForElement.get(contextIdentifier)!;
 
         if (!currentHandler.update) { // this binding has no updater

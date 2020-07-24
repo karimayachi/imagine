@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build-dev": "webpack --config webpack.dev.config",
+    "build-prod": "webpack --config webpack.prod.config",
     "demo": "webpack-dev-server --config webpack.demo.config"
   },
   "author": "",

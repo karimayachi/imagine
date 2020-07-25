@@ -18,7 +18,7 @@ export class BindingEngine {
     }
 
     parseBinding = (name: string, value: string, vm: any): BindingProperties | null => {
-        let bindingProperties: BindingProperties;
+        let bindingProperties: Omit<BindingProperties, 'element'>;
 
         switch (name[0]) {
             case '@':
@@ -133,7 +133,7 @@ export class BindingEngine {
         }
 
         console.log(bindingProperties);
-        return bindingProperties;
+        return <BindingProperties>bindingProperties; // to satisfy the typing system. it still misses the property 'element'. be sure to add that.
     }
 
     private recursiveResolveScope(currentScope: any, namespace: string): { propertyName: string, scope: any } {
@@ -178,17 +178,22 @@ export class BindingEngine {
         }
     }
 
-    bindInitPhase = (element: HTMLElement, bindingProperties: BindingProperties, vm: any): void => {
+    private rebind(bindingProperties: BindingProperties): void {
+        /* cleanup exisiting binding context */
+
+    }
+
+    bindInitPhase = (bindingProperties: BindingProperties, vm: any): void => {
         const currentHandler: BindingHandler = BindingEngine.handlers[bindingProperties.handler];
         let contextsForElement: Map<string, BindingContext>;
 
         /* if no context list exists yet for this element, create it */
-        if (!this.boundElements.has(element)) {
+        if (!this.boundElements.has(bindingProperties.element)) {
             contextsForElement = new Map<string, BindingContext>()
-            this.boundElements.set(element, contextsForElement);
+            this.boundElements.set(bindingProperties.element, contextsForElement);
         }
         else {
-            contextsForElement = this.boundElements.get(element)!;
+            contextsForElement = this.boundElements.get(bindingProperties.element)!;
         }
 
         /* if the context list for this element doesn't contain an entry for this binding(-type), create it and call INIT on the handler */
@@ -203,7 +208,7 @@ export class BindingEngine {
 
             contextsForElement.set(contextIdentifier, context);
 
-            currentHandler.init?.call(this, element, this.unwrap(bindingProperties.bindingValue), context, (value: any): void => { // for event bindings this updateFunction should not be provided
+            currentHandler.init?.call(this, bindingProperties.element, this.unwrap(bindingProperties.bindingValue), context, (value: any): void => { // for event bindings this updateFunction should not be provided
                 if (bindingProperties.propertyName !== 'this') {
                     context.preventCircularUpdate = true;
                     if (isObservable(bindingProperties.bindingValue)) {
@@ -217,9 +222,9 @@ export class BindingEngine {
         }
     }
 
-    bindUpdatePhase = (element: HTMLElement, bindingProperties: BindingProperties, vm: any): void => {
+    bindUpdatePhase = (bindingProperties: BindingProperties, vm: any): void => {
         const currentHandler: BindingHandler = BindingEngine.handlers[bindingProperties.handler];
-        const contextsForElement: Map<string, BindingContext> = this.boundElements.get(element)!;
+        const contextsForElement: Map<string, BindingContext> = this.boundElements.get(bindingProperties.element)!;
         let contextIdentifier: string = `${bindingProperties.handler}${bindingProperties.parameter ? ':' + bindingProperties.parameter : ''}`;
         let context: BindingContext = contextsForElement.get(contextIdentifier)!;
 
@@ -231,7 +236,7 @@ export class BindingEngine {
             let propertyValue: any = this.unwrap(bindingProperties.bindingValue);
 
             if (!context.preventCircularUpdate) {
-                currentHandler.update!(element, propertyValue, context, change);
+                currentHandler.update!(bindingProperties.element, propertyValue, context, change);
             }
 
             context.preventCircularUpdate = false;
@@ -266,7 +271,8 @@ export interface BindingProperties {
     handler: string,
     parameter: string,
     propertyName: string,
-    bindingValue: any
+    bindingValue: any,
+    element: HTMLElement
 }
 
 

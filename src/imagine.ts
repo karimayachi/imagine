@@ -62,6 +62,7 @@ export class Imagine {
         for (let index = node.attributes.length - 1; index >= 0; index--) {
             let parsedAttribute = this.bindingEngine.parseBinding(node.attributes[index].name, node.attributes[index].value, vm);
             if (parsedAttribute) {
+                parsedAttribute.element = node;
                 allAttributes.push(parsedAttribute);
                 node.removeAttribute(node.attributes[index].name);
             }
@@ -69,12 +70,12 @@ export class Imagine {
 
         /* first INIT all bindings */
         for (let parsedAttribute of allAttributes) {
-            this.bindingEngine.bindInitPhase(node, parsedAttribute, vm);
+            this.bindingEngine.bindInitPhase(parsedAttribute, vm);
         }
 
         /* next UPDATE all bindings and remove attributes */
         for (let parsedAttribute of allAttributes) {
-            this.bindingEngine.bindUpdatePhase(node, parsedAttribute, vm);
+            this.bindingEngine.bindUpdatePhase(parsedAttribute, vm);
         }
     }
 
@@ -92,8 +93,9 @@ export class Imagine {
                 if (matches![i]) {
                     let parsedNode = this.bindingEngine.parseBinding('@text', matches![i].substring(2, matches![i].length - 1), vm);
                     if (parsedNode) {
-                        this.bindingEngine.bindInitPhase(boundElement, parsedNode, vm);
-                        this.bindingEngine.bindUpdatePhase(boundElement, parsedNode, vm);
+                        parsedNode.element = boundElement;
+                        this.bindingEngine.bindInitPhase(parsedNode, vm);
+                        this.bindingEngine.bindUpdatePhase(parsedNode, vm);
                         newNodeList.push(boundElement);
                     }
                 }

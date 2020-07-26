@@ -63,7 +63,7 @@ export class ContextHandler implements BindingHandler {
             template.appendChild(element.childNodes[0]);
         }
 
-        scopes.set(context.propertyName, context.vm);
+        //scopes.set(context.propertyName, context.vm);
         context.template = template;
     }
 
@@ -105,7 +105,7 @@ export class ForEachHandler implements BindingHandler {
             template.appendChild(element.childNodes[0]);
         }
 
-        scopes.set(context.propertyName, context.vm);
+        //scopes.set(context.propertyName, context.vm);
         context.template = template;
     }
 

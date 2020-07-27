@@ -1,5 +1,5 @@
-import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue, observable, IObjectDidChange, Lambda } from 'mobx';
-import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler, VisibleHandler } from './bindingHandlers';
+import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue, IObjectDidChange, Lambda } from 'mobx';
+import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler, VisibleHandler, ScopeHandler, IfHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { PropertyHandler } from './propertyBinding';
 
@@ -56,22 +56,31 @@ export class BindingEngine {
 
         if (value.match(primitiveRegEx)) { // primitive
             let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, value, name, value, node) || {};
-            if (propertyName === undefined) return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
-
-            if (propertyName === 'this') {
-                bindingProperties.bindingValue = scope;
-            }
-            else if (scope instanceof Object) { // scope is an object / viewmodel
-                if (propertyName in scope) { // value is a property on object / viewmodel
-                    if (isObservableArray(scope[propertyName])) { // value is an observable array property
-                        bindingProperties.bindingValue = scope[propertyName];
+            
+            if (propertyName !== undefined) {
+                if (propertyName === 'this') {
+                    bindingProperties.bindingValue = scope;
+                }
+                else if (scope instanceof Object) { // scope is an object / viewmodel
+                    if (propertyName in scope) { // value is a property on object / viewmodel
+                        if (isObservableArray(scope[propertyName])) { // value is an observable array property
+                            bindingProperties.bindingValue = scope[propertyName];
+                        }
+                        else if (isObservableProp(scope, propertyName)) { // value is an observable property
+                            bindingProperties.bindingValue = getAtom(scope, propertyName);
+                        }
+                        else if (typeof scope[propertyName] === 'function') { // value is a method on scope
+                            bindingProperties.bindingValue = scope[propertyName];
+                        }
                     }
-                    else if (isObservableProp(scope, propertyName)) { // value is an observable property
-                        bindingProperties.bindingValue = getAtom(scope, propertyName);
-                    }
-                    else if (typeof scope[propertyName] === 'function') { // value is a method on scope
-                        bindingProperties.bindingValue = scope[propertyName];
-                    }
+                }
+            } 
+            else { // probably stop, but first check for 1 special case: a string is passed in stead of a property
+                if(value.indexOf('.') < 0) { // treat as string
+                    bindingProperties.bindingValue = value;
+                }
+                else {
+                    return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
                 }
             }
         }
@@ -192,7 +201,7 @@ export class BindingEngine {
                 if (levels[0] === 'this' || levels[0] in currentScope) {
                     return { propertyName: levels[0], scope: scope };
                 }
-                throw (`Undefined property: ${levels[0]}`);
+                return null; // wasn't able to parse binding, but don't throw yet: maybe it's a string binding
             case 2: // one level of namespacing
                 if (this.scopes.has(levels[0])) {
                     scope = this.scopes.get(levels[0]);
@@ -208,7 +217,7 @@ export class BindingEngine {
                 if (scope && levels[1] in scope) {
                     return { propertyName: levels[1], scope: scope };
                 }
-                console.error(`Undefined property: ${levels[1]}`, dependencyTree);
+            
                 return null; // wasn't able to parse binding, but don't throw yet: maybe the dependencyTree will get it to work in a future update of the viewmodel...
             default: // more levels, parse the lowest and go into recursion
                 if (this.scopes.has(levels[0])) {
@@ -344,6 +353,8 @@ BindingEngine.handlers['text'] = new TextHandler();
 BindingEngine.handlers['value'] = new ValueHandler();
 BindingEngine.handlers['foreach'] = new ForEachHandler();
 BindingEngine.handlers['context'] = new ContextHandler();
+BindingEngine.handlers['if'] = new IfHandler();
+BindingEngine.handlers['scope'] = new ScopeHandler();
 BindingEngine.handlers['html'] = new HtmlHandler();
 BindingEngine.handlers['visible'] = new VisibleHandler();
 

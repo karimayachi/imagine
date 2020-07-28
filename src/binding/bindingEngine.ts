@@ -52,7 +52,7 @@ export class BindingEngine {
          * - concatenation (<namespace.>propertyName + '<string>' + ...) I.e. 'https://url.com/' + person.personalPage, better to use template literals
          */
         let primitiveRegEx: RegExp = /^[\w.]+$/gm;
-        let ternaryRegEx: RegExp = /(\w+)\s*\?\s*\'([\w\s:!+=]+)'\s*:\s*'([\w\s:!+=]+)'/gm;
+        let ternaryRegEx: RegExp = /(\w+)\s*\?\s*\'([\w\s:\-!+=]+)'\s*:\s*'([\w\s:\-!+=]+)'/gm;
 
         if (value.match(primitiveRegEx)) { // primitive
             let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, value, name, value, node) || {};
@@ -91,6 +91,7 @@ export class BindingEngine {
             let parts: RegExpExecArray = ternaryRegEx.exec(value)!;
             let conditional: string = parts[1];
             let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, conditional, name, value, node) || {};
+            console.log(conditional, propertyName, scope)
             if (propertyName === undefined) return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
 
             /* in theory, you could use 'this' here if you're in a foreach iterating over an array of observable booleans

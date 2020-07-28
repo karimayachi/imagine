@@ -72,6 +72,9 @@ export class BindingEngine {
                         else if (typeof scope[propertyName] === 'function') { // value is a method on scope
                             bindingProperties.bindingValue = scope[propertyName];
                         }
+                        else { // non-observable property on scope
+                            bindingProperties.bindingValue = scope[propertyName];
+                        }
                     }
                 }
             } 

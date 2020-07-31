@@ -36,7 +36,7 @@ export class Imagine {
         for (let index = 0; index < rootNode.childNodes.length; index++) {
             children.push(rootNode.childNodes[index]);
         }
-
+        
         if (rootNode.nodeType === 1) {
             this.bindAttributes(<HTMLElement>rootNode, vm);
         }
@@ -69,12 +69,12 @@ export class Imagine {
 
         /* first INIT all bindings */
         for (let parsedAttribute of allAttributes) {
-            this.bindingEngine.bindInitPhase(parsedAttribute, vm);
+            this.bindingEngine.bindInitPhase(parsedAttribute);
         }
 
         /* next UPDATE all bindings and remove attributes */
         for (let parsedAttribute of allAttributes) {
-            this.bindingEngine.bindUpdatePhase(parsedAttribute, vm);
+            this.bindingEngine.bindUpdatePhase(parsedAttribute);
         }
     }
 
@@ -93,8 +93,8 @@ export class Imagine {
                     let parsedNode = this.bindingEngine.parseBinding('@text', matches![i].substring(2, matches![i].length - 1), boundElement, vm);
                     if (parsedNode) {
                         parsedNode.element = boundElement;
-                        this.bindingEngine.bindInitPhase(parsedNode, vm);
-                        this.bindingEngine.bindUpdatePhase(parsedNode, vm);
+                        this.bindingEngine.bindInitPhase(parsedNode);
+                        this.bindingEngine.bindUpdatePhase(parsedNode);
                     }
 
                     newNodeList.push(boundElement); // even if not bound keep it as a span in DOM. maybe the dependency tree will bind it later

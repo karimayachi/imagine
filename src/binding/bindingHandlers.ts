@@ -218,11 +218,12 @@ export class ForEachHandler implements BindingHandler {
                                     handler: '__property',
                                     propertyName: 'selected',
                                     bindingValue: vm.selected,
+                                    scope: vm,
                                     parameter: 'selected',
                                     element: itemElement
                                 };
-                                bindingEngine.bindInitPhase(bindingProperties, vm);
-                                bindingEngine.bindUpdatePhase(bindingProperties, vm);
+                                bindingEngine.bindInitPhase(bindingProperties);
+                                bindingEngine.bindUpdatePhase(bindingProperties);
                             }
                         }, 0);
                     }

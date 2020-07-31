@@ -18,12 +18,12 @@ export class BindingEngine {
     }
 
     parseBinding = (name: string, value: string, node: HTMLElement, vm: any): BindingProperties | null => {
-        let bindingProperties: BindingProperties = { handler: '', parameter: '', propertyName: value, bindingValue: null, element: node };
+        let bindingProperties: BindingProperties = { handler: '', parameter: '', propertyName: value, scope: null, bindingValue: null, element: node };
 
         switch (name[0]) {
             case '@':
                 if (BindingEngine.handlers[name.substr(1)]) {
-                    bindingProperties. handler = name.substr(1);
+                    bindingProperties.handler = name.substr(1);
                 }
                 else {
                     throw (`Unknown binding '${name.substr(1)}'`);
@@ -56,7 +56,9 @@ export class BindingEngine {
 
         if (value.match(primitiveRegEx)) { // primitive
             let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, value, name, value, node) || {};
-            
+            bindingProperties.propertyName = propertyName || bindingProperties.propertyName;
+            bindingProperties.scope = scope;
+
             if (propertyName !== undefined) {
                 if (propertyName === 'this') {
                     bindingProperties.bindingValue = scope;
@@ -77,10 +79,11 @@ export class BindingEngine {
                         }
                     }
                 }
-            } 
+            }
             else { // probably stop, but first check for 1 special case: a string is passed in stead of a property
-                if(value.indexOf('.') < 0) { // treat as string
+                if (value.indexOf('.') < 0) { // treat as string.. only used for scope-binding.. find a cleaner solution than to mix string syntax with parameter syntax
                     bindingProperties.bindingValue = value;
+                    bindingProperties.scope = vm;
                 }
                 else {
                     return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
@@ -109,6 +112,7 @@ export class BindingEngine {
 
                 bindingProperties.propertyName = propertyName;
                 bindingProperties.bindingValue = bindingValue;
+                bindingProperties.scope = scope;
             }
             else {
                 return null;
@@ -122,6 +126,7 @@ export class BindingEngine {
 
             bindingProperties.propertyName = propertyName;
             bindingProperties.bindingValue = bindingValue;
+            bindingProperties.scope = scope;
         }
         else if (value.indexOf('+') > 0) { // simple concatenation
             let elements: string[] = value.split('+');
@@ -163,6 +168,16 @@ export class BindingEngine {
             bindingProperties.propertyName = value.substr(1);
             bindingProperties.bindingValue = bindingValue;
         }
+        
+
+        /* event-bindings should be run in their original scope. even if the binding comes from a different scope.
+         * for instance a foreach loop containing a click binding to app.clickHandler should (upon click) execute clickHandler
+         * FROM the app-scope, but execute it IN the foreach scope.
+         * Not at all pleased with this exception to the rule. TODO: Make this a general case
+         */
+        if(bindingProperties.handler == '__event') {
+            bindingProperties.scope = vm;
+        }
 
         //console.log(bindingProperties);
         return <BindingProperties>bindingProperties; // to satisfy the typing system. it still misses the property 'element'. be sure to add that.
@@ -175,17 +190,29 @@ export class BindingEngine {
         /* build the dependency tree */
         if (dependencyTree.length > 0) {
             let disposers: Lambda[] = []; /* will the array of disposers be disposed itself? */
+            let storedChildElements: DocumentFragment = document.createDocumentFragment();  /* remove and store all child elements if the binding failed. If retrying, we add them back in, but for now just assume this whole tree to be corrupted */
 
-            for(let treeNode of dependencyTree) {
+            if(finalScope == null) { /* binding failed. save and remove the childelements */
+                while (originalElement.childNodes.length > 0) {
+                    storedChildElements.appendChild(originalElement.childNodes[0]);
+                }
+            }
+
+            for (let treeNode of dependencyTree) {
                 let disposer: Lambda = observe(treeNode.vm, treeNode.property, (): void => {
                     /* somewhere in the observed path a node is changed
                      * dispose of all listeners and (try to) rebind the whole path to it's original binding
                      */
-                     for(let dispose of disposers) {
-                         dispose();
-                     }
+                    for (let dispose of disposers) {
+                        dispose();
+                    }
 
-                     this.rebind(originalName, originalValue, scope, originalElement);
+                    /* restore the original DOM structure and try to bind again */
+                    while (storedChildElements.childNodes.length > 0) {
+                        originalElement.appendChild(storedChildElements.childNodes[0]);
+                    }
+
+                    this.rebind(originalName, originalValue, scope, originalElement);
                 });
 
                 disposers.push(disposer);
@@ -220,7 +247,7 @@ export class BindingEngine {
                 if (scope && levels[1] in scope) {
                     return { propertyName: levels[1], scope: scope };
                 }
-            
+
                 return null; // wasn't able to parse binding, but don't throw yet: maybe the dependencyTree will get it to work in a future update of the viewmodel...
             default: // more levels, parse the lowest and go into recursion
                 if (this.scopes.has(levels[0])) {
@@ -243,23 +270,23 @@ export class BindingEngine {
         
         if (newBindingProperties) {
             /* clean up existing context */
-            if(this.boundElements.has(originalElement)) {
+            if (this.boundElements.has(originalElement)) {
                 let contextsForElement: Map<string, BindingContext> = this.boundElements.get(originalElement)!;
                 let contextIdentifier: string = `${newBindingProperties.handler}${newBindingProperties.parameter ? ':' + newBindingProperties.parameter : ''}`;
 
-                if(contextsForElement.has(contextIdentifier)) {
+                if (contextsForElement.has(contextIdentifier)) {
                     console.log('EXISTING CONTEXT FOUND', contextsForElement.get(contextIdentifier));
                     contextsForElement.delete(contextIdentifier);
                 }
-            } 
+            }
 
             /* rebind */
-            this.bindInitPhase(newBindingProperties, originalVM, true);
-            this.bindUpdatePhase(newBindingProperties, originalVM);
+            this.bindInitPhase(newBindingProperties, true);
+            this.bindUpdatePhase(newBindingProperties);
         }
     }
 
-    bindInitPhase = (bindingProperties: BindingProperties, vm: any, rebind: boolean = false): void => {
+    bindInitPhase = (bindingProperties: BindingProperties, rebind: boolean = false): void => {
         const currentHandler: BindingHandler = BindingEngine.handlers[bindingProperties.handler];
         let contextsForElement: Map<string, BindingContext>;
 
@@ -278,7 +305,7 @@ export class BindingEngine {
 
         if (!contextsForElement.has(contextIdentifier) || rebind) {
             context = new BindingContext();
-            context.vm = vm;
+            context.vm = bindingProperties.scope;
             context.propertyName = bindingProperties.propertyName;
             context.parameter = bindingProperties.parameter;
 
@@ -298,7 +325,7 @@ export class BindingEngine {
         }
     }
 
-    bindUpdatePhase = (bindingProperties: BindingProperties, vm: any): void => {
+    bindUpdatePhase = (bindingProperties: BindingProperties): void => {
         const currentHandler: BindingHandler = BindingEngine.handlers[bindingProperties.handler];
         const contextsForElement: Map<string, BindingContext> = this.boundElements.get(bindingProperties.element)!;
         let contextIdentifier: string = `${bindingProperties.handler}${bindingProperties.parameter ? ':' + bindingProperties.parameter : ''}`;
@@ -347,6 +374,7 @@ export interface BindingProperties {
     handler: string,
     parameter: string,
     propertyName: string,
+    scope: any,
     bindingValue: any,
     element: HTMLElement
 }

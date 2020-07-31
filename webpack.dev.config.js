@@ -22,7 +22,7 @@ module.exports = [
     output: {
       path: __dirname + '/dist',
       publicPath: '/dist/',
-      filename: 'imagine.js',
+      filename: 'index.js',
       library: 'imagine',
       libraryTarget: 'umd'
     },

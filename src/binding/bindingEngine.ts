@@ -45,14 +45,18 @@ export class BindingEngine {
                 return null;
         }
 
-        /* Parse the passed value. It can be
+        /* Parse the passed value. THIS IS BY NO MEANS A COMPLETE PARSER, IT ONLY HANDLES SOME STRAIGHTFORWARD CASES FOR THE PROOF OF CONCEPT!
+         * It can be
          * - primitive (<namespace.>propertyName or 'this'). I.e. person, person.firstName, this, someNamedScope.this, someNamedScope.getNames
          * - a ternary conditional (<namespace.>propertyName ? '<string>' : '<string>'). I.e. person.isRetired ? 'retired' : 'still working'
          * - negation (!<namespace.>propertyName). I.e. !person.isRetired, !showMenu
+         * - equality comparison (<namespace>.propertyName == 'some string' or <namespace>.propertyName == <number>)
          * - concatenation (<namespace.>propertyName + '<string>' + ...) I.e. 'https://url.com/' + person.personalPage, better to use template literals
          */
         let primitiveRegEx: RegExp = /^[\w.]+$/gm;
-        let ternaryRegEx: RegExp = /(\w+)\s*\?\s*\'([\w\s:\-!+=]+)'\s*:\s*'([\w\s:\-!+=]+)'/gm;
+        let ternaryRegEx: RegExp = /^([\w.]+)\s*\?\s*'([\w\s:\-?!+\/#=]+)'\s*:\s*'([\w\s:\-?!+\/#=]+)'\s*$/gm;
+        let compStringRegEx: RegExp = /^([\w.]+)\s*==\s*'([\w\s:\-?!+\/#=]+)'\s*$/gm;
+        let compNumberRegEx: RegExp = /^([\w.]+)\s*==\s*([0-9]+)\s*$/gm;
 
         if (value.match(primitiveRegEx)) { // primitive
             let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, value, name, value, node) || {};
@@ -118,6 +122,24 @@ export class BindingEngine {
                 return null;
             }
         }
+        else if (value.match(compNumberRegEx) || value.match(compStringRegEx)) { // comparison conditional
+            let parts: RegExpExecArray = value.match(compStringRegEx) ? compStringRegEx.exec(value)! : compNumberRegEx.exec(value)!;
+            let conditional: string = parts[1];
+            let condition: string | number = value.match(compStringRegEx) ? parts[2] : parseInt(parts[2]);
+            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, conditional, name, value, node) || {};
+            if (propertyName === undefined) return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
+
+            if (propertyName in scope) {
+                let bindingValue: IComputedValue<boolean> = computed((): boolean => scope[<string>propertyName] === condition);
+
+                bindingProperties.propertyName = propertyName;
+                bindingProperties.bindingValue = bindingValue;
+                bindingProperties.scope = scope;
+            }
+            else {
+                return null;
+            }
+        }
         else if (value[0] == '!') { // simplified negation
             let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, value.substr(1), name, value, node) || {};
             if (propertyName === undefined) return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
@@ -168,19 +190,19 @@ export class BindingEngine {
             bindingProperties.propertyName = value.substr(1);
             bindingProperties.bindingValue = bindingValue;
         }
-        
+
 
         /* event-bindings should be run in their original scope. even if the binding comes from a different scope.
          * for instance a foreach loop containing a click binding to app.clickHandler should (upon click) execute clickHandler
          * FROM the app-scope, but execute it IN the foreach scope.
          * Not at all pleased with this exception to the rule. TODO: Make this a general case
          */
-        if(bindingProperties.handler == '__event') {
+        if (bindingProperties.handler == '__event') {
             bindingProperties.scope = vm;
         }
 
         //console.log(bindingProperties);
-        return <BindingProperties>bindingProperties; // to satisfy the typing system. it still misses the property 'element'. be sure to add that.
+        return bindingProperties;
     }
 
     private resolveScopeAndCreateDependencyTree(scope: any, namespace: string, originalName: string, originalValue: string, originalElement: HTMLElement): { propertyName: string, scope: any } | null {
@@ -192,7 +214,7 @@ export class BindingEngine {
             let disposers: Lambda[] = []; /* will the array of disposers be disposed itself? */
             let storedChildElements: DocumentFragment = document.createDocumentFragment();  /* remove and store all child elements if the binding failed. If retrying, we add them back in, but for now just assume this whole tree to be corrupted */
 
-            if(finalScope == null) { /* binding failed. save and remove the childelements */
+            if (finalScope == null) { /* binding failed. save and remove the childelements */
                 while (originalElement.childNodes.length > 0) {
                     storedChildElements.appendChild(originalElement.childNodes[0]);
                 }
@@ -267,7 +289,8 @@ export class BindingEngine {
 
     private rebind(originalName: string, originalValue: string, originalVM: any, originalElement: HTMLElement): void {
         let newBindingProperties = this.parseBinding(originalName, originalValue, originalElement, originalVM);
-        
+        let oldBindingContextTemplate: any;
+
         if (newBindingProperties) {
             /* clean up existing context */
             if (this.boundElements.has(originalElement)) {
@@ -275,13 +298,25 @@ export class BindingEngine {
                 let contextIdentifier: string = `${newBindingProperties.handler}${newBindingProperties.parameter ? ':' + newBindingProperties.parameter : ''}`;
 
                 if (contextsForElement.has(contextIdentifier)) {
-                    console.log('EXISTING CONTEXT FOUND', contextsForElement.get(contextIdentifier));
+                    oldBindingContextTemplate = contextsForElement.get(contextIdentifier)?.template; // Save a template if there was one... For if and foreach bindings that loose their template otherwise...
                     contextsForElement.delete(contextIdentifier);
                 }
             }
 
-            /* rebind */
+            /* rebind init phase */
             this.bindInitPhase(newBindingProperties, true);
+            
+            /* restore template if there was one before */
+            if(this.boundElements.has(originalElement) && oldBindingContextTemplate !== undefined) {
+                let contextsForElement: Map<string, BindingContext> = this.boundElements.get(originalElement)!;
+                let contextIdentifier: string = `${newBindingProperties.handler}${newBindingProperties.parameter ? ':' + newBindingProperties.parameter : ''}`;
+
+                if (contextsForElement.has(contextIdentifier)) {
+                    contextsForElement.get(contextIdentifier)!.template = oldBindingContextTemplate;
+                }
+            }
+
+            /* rebind update phase */
             this.bindUpdatePhase(newBindingProperties);
         }
     }

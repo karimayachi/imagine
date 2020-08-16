@@ -10,7 +10,7 @@ export abstract class BindingHandler {
 
 export class TextHandler implements BindingHandler {
     update(element: HTMLElement, value: string): void {
-        element.innerText = value;
+        element.textContent = value;
     }
 }
 

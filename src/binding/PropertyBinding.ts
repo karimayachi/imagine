@@ -6,6 +6,14 @@ export class PropertyHandler implements BindingHandler {
     init(element: HTMLElement, _value: any, context: BindingContext, updateValue: (value: any) => void): void {
         setTimeout(() => { // Move init to back of callstack, so Custom Element is initialized first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
             let propertyName: string = context.parameter!;
+
+            /* deal with the absolutely stupid fact that attributes are case insensitive, hopefully our properties are enumerable */
+            for(let caseSensitivePropertyName in element) {
+                if(caseSensitivePropertyName.toLowerCase() === propertyName) {
+                    propertyName = context.parameter = caseSensitivePropertyName;
+                }
+            }
+
             let descriptor: PropertyDescriptor | undefined = getPropertyDescriptorFromPrototypeChain(element, propertyName);
 
             if (descriptor) {

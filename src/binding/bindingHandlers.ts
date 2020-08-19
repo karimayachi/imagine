@@ -1,6 +1,6 @@
 import { BindingContext } from './bindingContext';
 import { bind, scopes, contexts, bindingEngine } from '../index';
-import { IArraySplice, observe, observable, isObservableProp, IArrayChange } from 'mobx';
+import { IArraySplice, observe, observable, IArrayChange } from 'mobx';
 import { BindingProperties } from './bindingEngine';
 
 export abstract class BindingHandler {
@@ -10,7 +10,15 @@ export abstract class BindingHandler {
 
 export class TextHandler implements BindingHandler {
     update(element: HTMLElement, value: string): void {
-        element.textContent = value;
+        let transform = <Function | null>bindingEngine.getTransformFor(element, 'text');
+
+        /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
+        if (transform) {
+            element.textContent = transform(value);
+        }
+        else {
+            element.textContent = value;
+        }
     }
 }
 
@@ -30,12 +38,28 @@ export class VisibleHandler implements BindingHandler {
 export class ValueHandler implements BindingHandler {
     init(element: HTMLElement, _value: any, _contex: BindingContext, updateValue: (value: string) => void): void {
         (<HTMLInputElement>element).addEventListener('input', (): void => {
-            updateValue((<HTMLInputElement>element).value);
+            let transform = <{ read: Function, write: Function } | null>bindingEngine.getTransformFor(element, 'value');
+
+            /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
+            if (transform && transform.write) {
+                updateValue(transform.write((<HTMLInputElement>element).value));
+            }
+            else {
+                updateValue((<HTMLInputElement>element).value);
+            }
         });
     }
 
     update(element: HTMLElement, value: string): void {
-        (<HTMLInputElement>element).value = value;
+        let transform = <{ read: Function, write: Function } | null>bindingEngine.getTransformFor(element, 'value');
+
+        /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
+        if (transform && transform.read) {
+            (<HTMLInputElement>element).value = transform.read(value);
+        }
+        else {
+            (<HTMLInputElement>element).value = value;
+        }
     }
 }
 
@@ -58,6 +82,12 @@ export class AttributeHandler implements BindingHandler {
 export class ScopeHandler implements BindingHandler {
     init(_element: HTMLElement, value: any, context: BindingContext, _updateValue: (value: string) => void): void {
         scopes.set(value, context.vm);
+    }
+}
+
+export class TransformHandler implements BindingHandler {
+    init(_element: HTMLElement, value: any, context: BindingContext, _updateValue: (value: string) => void): void {
+
     }
 }
 
@@ -155,7 +185,7 @@ export class ForEachHandler implements BindingHandler {
                 }
             }
         }
-        else if(change && change.type === 'update') {
+        else if (change && change.type === 'update') {
             element.innerHTML = ''; /* TODO: does this sufficiently trigger GC? do the bindings disappear from the weakmap AND underlying map? */
 
             for (let item of change.newValue) {
@@ -198,9 +228,9 @@ export class ForEachHandler implements BindingHandler {
                                         (<any>itemElement).selected = true;
                                     }, 10);
                                 }
-                                
+
                                 observe(element, 'selecteditem', change => {
-                                    if(!innerPreventCircularUpdate) {
+                                    if (!innerPreventCircularUpdate) {
                                         innerPreventCircularUpdate = true;
 
                                         if (change.newValue === item) {
@@ -208,7 +238,7 @@ export class ForEachHandler implements BindingHandler {
                                         }
                                         else {
                                             (<any>itemElement).selected = false;
-                                        }    
+                                        }
                                     }
 
                                     innerPreventCircularUpdate = false;

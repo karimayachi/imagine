@@ -38,7 +38,12 @@ export class Imagine {
         }
         
         if (rootNode.nodeType === 1) {
-            this.bindAttributes(<HTMLElement>rootNode, vm);
+            if((<HTMLElement>rootNode).tagName === 'IMAGINE-TRANSFORM') {
+                this.bindDirectives(<HTMLElement>rootNode, vm);
+            }
+            else {
+                this.bindAttributes(<HTMLElement>rootNode, vm);
+            }
         }
 
         if (rootNode.nodeType === 3) {
@@ -76,6 +81,19 @@ export class Imagine {
         for (let parsedAttribute of allAttributes) {
             this.bindingEngine.bindUpdatePhase(parsedAttribute);
         }
+    }
+
+    private bindDirectives(node: HTMLElement, vm: any) {
+        /* only transform directive so far, so assume that */
+
+        let attribute: string = node.getAttribute('TRANSFORM') || '';
+        let parsedAttribute = this.bindingEngine.parseBinding('@transform', attribute, node, vm);
+        
+        if(!parsedAttribute) return;
+
+        parsedAttribute.parameter = node.getAttribute('TARGET') || ''; /* only TARGET is implemented.. NAME would be the other option */
+
+        this.bindingEngine.bindInitPhase(parsedAttribute);
     }
 
     private bindInlinedText(node: HTMLElement, vm: any) {

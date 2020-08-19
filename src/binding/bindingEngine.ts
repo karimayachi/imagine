@@ -1,5 +1,5 @@
 import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue, IObjectDidChange, Lambda } from 'mobx';
-import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler, VisibleHandler, ScopeHandler, IfHandler } from './bindingHandlers';
+import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler, VisibleHandler, ScopeHandler, IfHandler, TransformHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { PropertyHandler } from './propertyBinding';
 
@@ -349,7 +349,10 @@ export class BindingEngine {
             currentHandler.init?.call(this, bindingProperties.element, this.unwrap(bindingProperties.bindingValue), context, (value: any): void => { // for event bindings this updateFunction should not be provided
                 if (bindingProperties.propertyName !== 'this') {
                     context.preventCircularUpdate = true;
-                    if (isObservable(bindingProperties.bindingValue)) {
+                    if(isObservableArray(bindingProperties.bindingValue)) {
+                        bindingProperties.scope[bindingProperties.propertyName] = value;
+                    }
+                    else if (isObservable(bindingProperties.bindingValue)) {
                         bindingProperties.bindingValue.set(value);
                     }
                     else {
@@ -383,8 +386,8 @@ export class BindingEngine {
         if (isObservable(bindingProperties.bindingValue)) {
             if (isObservableArray(bindingProperties.bindingValue)) { /* not only observe the array contents, but also replacing the array */
                 observe(context.vm, bindingProperties.propertyName, (change: IValueDidChange<any>): void => {
+                    bindingProperties.bindingValue = change.newValue;
                     updateFunction(change);
-                    observe(context.vm[bindingProperties.propertyName], updateFunction); /* observe the new array */
                 });
             }
 
@@ -392,6 +395,20 @@ export class BindingEngine {
         }
 
         updateFunction();
+    }
+
+    getTransformFor = (element: HTMLElement, target: string): Function | { read: Function, write: Function } | null => {
+        let id: string = 'transform:' + target;
+
+        if(this.boundElements.has(element) && this.boundElements.get(element)!.has(id)) {
+            return this.boundElements.get(element)!.get(id)!.vm[this.boundElements.get(element)!.get(id)!.propertyName];
+        }
+        else if(element.parentElement === null) {
+            return null;
+        }
+        else {
+            return this.getTransformFor(element.parentElement, target);
+        }
     }
 
     private unwrap(property: any): any {
@@ -423,6 +440,8 @@ BindingEngine.handlers['if'] = new IfHandler();
 BindingEngine.handlers['scope'] = new ScopeHandler();
 BindingEngine.handlers['html'] = new HtmlHandler();
 BindingEngine.handlers['visible'] = new VisibleHandler();
+
+BindingEngine.handlers['transform'] = new TransformHandler();
 
 BindingEngine.handlers['__attribute'] = new AttributeHandler();
 BindingEngine.handlers['__property'] = new PropertyHandler();

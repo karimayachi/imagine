@@ -142,7 +142,15 @@ export class HtmlHandler implements BindingHandler {
 
         if (value !== undefined && value !== null) {
             let template: HTMLTemplateElement = document.createElement('template');
-            template.innerHTML = value;
+            let transform = <Function | null>bindingEngine.getTransformFor(element, 'html');
+
+            /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
+            if (transform) {
+                template.innerHTML = transform(value);
+            }
+            else {
+                template.innerHTML = value;
+            }
 
             element.appendChild(template.content);
             setTimeout(() => { // Move init to back of callstack, so Custom Element is initialized first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check

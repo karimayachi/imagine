@@ -107,7 +107,7 @@ export class IfHandler implements BindingHandler {
 
         if (value && context.template) {
             let newItem: HTMLElement = <HTMLElement>context.template.cloneNode(true);
-            bind(newItem, context.vm);
+            bind(newItem, context.originalVm);
             element.appendChild(newItem);
         }
     }
@@ -257,6 +257,7 @@ export class ForEachHandler implements BindingHandler {
                                     propertyName: 'selected',
                                     bindingValue: vm.selected,
                                     scope: vm,
+                                    vm: vm, 
                                     parameter: 'selected',
                                     element: itemElement
                                 };

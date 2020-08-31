@@ -2,6 +2,7 @@ import { isObservableProp, observe, IValueDidChange, isObservableArray, isObserv
 import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler, VisibleHandler, ScopeHandler, IfHandler, TransformHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { PropertyHandler } from './propertyBinding';
+import { bind } from 'index';
 
 interface BindingHandlers {
     [key: string]: BindingHandler
@@ -18,7 +19,7 @@ export class BindingEngine {
     }
 
     parseBinding = (name: string, value: string, node: HTMLElement, vm: any): BindingProperties | null => {
-        let bindingProperties: BindingProperties = { handler: '', parameter: '', propertyName: value, scope: null, bindingValue: null, element: node };
+        let bindingProperties: BindingProperties = { handler: '', parameter: '', propertyName: value, vm: vm, scope: null, bindingValue: null, element: node };
 
         switch (name[0]) {
             case '@':
@@ -341,6 +342,7 @@ export class BindingEngine {
         if (!contextsForElement.has(contextIdentifier) || rebind) {
             context = new BindingContext();
             context.vm = bindingProperties.scope;
+            context.originalVm = bindingProperties.vm;
             context.propertyName = bindingProperties.propertyName;
             context.parameter = bindingProperties.parameter;
 
@@ -387,6 +389,7 @@ export class BindingEngine {
             if (isObservableArray(bindingProperties.bindingValue)) { /* not only observe the array contents, but also replacing the array */
                 observe(context.vm, bindingProperties.propertyName, (change: IValueDidChange<any>): void => {
                     bindingProperties.bindingValue = change.newValue;
+                    observe(bindingProperties.bindingValue, updateFunction); /* observe the content of the new array */
                     updateFunction(change);
                 });
             }
@@ -427,6 +430,7 @@ export interface BindingProperties {
     parameter: string,
     propertyName: string,
     scope: any,
+    vm: any,
     bindingValue: any,
     element: HTMLElement
 }

@@ -178,7 +178,7 @@ export class ForEachHandler implements BindingHandler {
     update(element: HTMLElement, value: any, context: BindingContext, change: IArraySplice<any> | IArrayChange): void {
         if (change && change.type === 'splice') {
             for (let item of change.added) {
-                addItem(item);
+                addItem(item, change.index);
             }
 
             for (let item of change.removed) {
@@ -206,7 +206,7 @@ export class ForEachHandler implements BindingHandler {
             }
         }
 
-        function addItem(item: any) {
+        function addItem(item: any, index?: number) {
             if (context.template) {
                 let content: DocumentFragment = <DocumentFragment>context.template.cloneNode(true);
                 bind(content, item);
@@ -268,7 +268,12 @@ export class ForEachHandler implements BindingHandler {
                     }
                 }
 
-                element.appendChild(content);
+                if(index !== undefined) {
+                    element.insertBefore(content, element.children[index]);
+                }
+                else {
+                    element.appendChild(content);
+                }
             }
         }
     }

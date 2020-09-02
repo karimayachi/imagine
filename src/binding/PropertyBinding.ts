@@ -7,15 +7,8 @@ export class PropertyHandler implements BindingHandler {
         setTimeout(() => { // Move init to back of callstack, so Custom Element is initialized first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
             let propertyName: string = context.parameter!;
 
-            /* deal with the absolutely stupid fact that attributes are case insensitive, hopefully our properties are enumerable */
-            for(let caseSensitivePropertyName in element) {
-                if(caseSensitivePropertyName.toLowerCase() === propertyName) {
-                    propertyName = context.parameter = caseSensitivePropertyName;
-                }
-            }
-
             let descriptor: PropertyDescriptor | undefined = getPropertyDescriptorFromPrototypeChain(element, propertyName);
-
+          
             if (descriptor) {
                 Object.defineProperty(element, propertyName, {
                     enumerable: descriptor.enumerable || false,
@@ -66,6 +59,13 @@ export class PropertyHandler implements BindingHandler {
 function getPropertyDescriptorFromPrototypeChain(obj: Object, key: string): PropertyDescriptor | undefined {
     if (obj.hasOwnProperty(key)) {
         return Object.getOwnPropertyDescriptor(obj, key);
+    }
+    else { /* deal with the absolutely stupid fact that attributes are case insensitive, hopefully our properties are enumerable */
+        for(let caseSensitiveDescriptorName in Object.getOwnPropertyDescriptors(obj)) {
+            if(caseSensitiveDescriptorName.toLowerCase() === key) {
+                return Object.getOwnPropertyDescriptors(obj)[caseSensitiveDescriptorName];
+            }
+        }
     }
 
     let p: any = Object.getPrototypeOf(obj);

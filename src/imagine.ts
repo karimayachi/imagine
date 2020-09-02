@@ -71,7 +71,7 @@ export class Imagine {
                 node.removeAttribute(node.attributes[index].name);
             }
         }
-
+        
         /* first INIT all bindings */
         for (let parsedAttribute of allAttributes) {
             this.bindingEngine.bindInitPhase(parsedAttribute);

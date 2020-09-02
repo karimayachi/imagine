@@ -154,7 +154,7 @@ export class BindingEngine {
         else if (value.indexOf('+') > 0) { // simple concatenation
             let elements: string[] = value.split('+');
             elements = elements.map(item => item.trim());
-            let stringRegex: RegExp = /^'([\w#/]+)'$/gm;
+            let stringRegex: RegExp = /^'([\w#/\s]+)'$/gm;
 
             let allBindingsParsed = true;
             for (let i = 0; i < elements.length; i++) {

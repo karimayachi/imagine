@@ -7,16 +7,18 @@ export class PropertyHandler implements BindingHandler {
         setTimeout(() => { // Move init to back of callstack, so Custom Element is initialized first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
             let propertyName: string = context.parameter!;
 
-            let descriptor: PropertyDescriptor | undefined = getPropertyDescriptorFromPrototypeChain(element, propertyName);
-          
-            if (descriptor) {
-                Object.defineProperty(element, propertyName, {
-                    enumerable: descriptor.enumerable || false,
-                    configurable: descriptor.enumerable || false,
-                    get: descriptor.get,
+            let caseSensitiveDescriptor: { descriptor: PropertyDescriptor, caseSensitiveName: string } | null = getPropertyDescriptorFromPrototypeChain(element, propertyName);
+
+            if (caseSensitiveDescriptor) { // configure existing property
+                context.parameter = caseSensitiveDescriptor.caseSensitiveName; // update the context to match the real properyname
+
+                Object.defineProperty(element, caseSensitiveDescriptor.caseSensitiveName, {
+                    enumerable: caseSensitiveDescriptor.descriptor.enumerable || false,
+                    configurable: true, // Whatever the original was, we need to be able to change this property from now on
+                    get: caseSensitiveDescriptor.descriptor.get,
                     set: (value: any): void => {
-                        if (descriptor!.set) {
-                            descriptor!.set!.call(element, value);
+                        if (caseSensitiveDescriptor!.descriptor!.set) {
+                            caseSensitiveDescriptor!.descriptor!.set!.call(element, value);
                         }
                         if (!context.preventCircularUpdate) {
                             updateValue(value);
@@ -25,7 +27,7 @@ export class PropertyHandler implements BindingHandler {
                     }
                 });
             }
-            else {
+            else { // create new property
                 let closureValue: any = observable.box();
                 let newProperties: object = {};
                 
@@ -56,24 +58,24 @@ export class PropertyHandler implements BindingHandler {
     }
 }
 
-function getPropertyDescriptorFromPrototypeChain(obj: Object, key: string): PropertyDescriptor | undefined {
+function getPropertyDescriptorFromPrototypeChain(obj: Object, key: string): { descriptor: PropertyDescriptor, caseSensitiveName: string } | null {
     if (obj.hasOwnProperty(key)) {
-        return Object.getOwnPropertyDescriptor(obj, key);
+        return { descriptor: Object.getOwnPropertyDescriptor(obj, key)!, caseSensitiveName: key };
     }
     else { /* deal with the absolutely stupid fact that attributes are case insensitive, hopefully our properties are enumerable */
         for(let caseSensitiveDescriptorName in Object.getOwnPropertyDescriptors(obj)) {
             if(caseSensitiveDescriptorName.toLowerCase() === key) {
-                return Object.getOwnPropertyDescriptors(obj)[caseSensitiveDescriptorName];
+                return { descriptor: Object.getOwnPropertyDescriptors(obj)[caseSensitiveDescriptorName], caseSensitiveName: caseSensitiveDescriptorName };
             }
         }
     }
 
-    let p: any = Object.getPrototypeOf(obj);
+    let prototype: any = Object.getPrototypeOf(obj);
 
-    if (p) {
-        return getPropertyDescriptorFromPrototypeChain(p, key);
+    if (prototype) {
+        return getPropertyDescriptorFromPrototypeChain(prototype, key);
     }
     else {
-        return undefined;
+        return null;
     }
 }

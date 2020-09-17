@@ -1,6 +1,8 @@
 import { BindingEngine, BindingProperties } from './binding/bindingEngine';
 import { BindingContext } from './binding/bindingContext';
 
+export const PROPERTY_SETTER_SYMBOL: unique symbol = Symbol();
+
 export class Imagine {
     bindingEngine: BindingEngine;
 

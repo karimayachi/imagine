@@ -1,6 +1,7 @@
 import { BindingHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { IArraySplice, observable, extendObservable } from 'mobx';
+import { PROPERTY_SETTER_SYMBOL } from '../imagine';
 
 export class PropertyHandler implements BindingHandler {
     init(element: HTMLElement, _value: any, context: BindingContext, updateValue: (value: any) => void): void {
@@ -12,13 +13,27 @@ export class PropertyHandler implements BindingHandler {
             if (caseSensitiveDescriptor) { // configure existing property
                 context.parameter = caseSensitiveDescriptor.caseSensitiveName; // update the context to match the real properyname
 
+                /* Check to see if we have bound this property before: the setter should than have
+                 * a PROPERTY_SETTER_SYMBOL property containing the original setter
+                 */
+                let originalSetter: Function | undefined;
+                let rebindAlreadyBoundProperty: boolean = false;
+
+                if(caseSensitiveDescriptor!.descriptor!.set && PROPERTY_SETTER_SYMBOL in caseSensitiveDescriptor!.descriptor!.set) {
+                    originalSetter = (<any>caseSensitiveDescriptor!.descriptor!.set)[PROPERTY_SETTER_SYMBOL];
+                    rebindAlreadyBoundProperty = true;
+                }
+                else {
+                    originalSetter = caseSensitiveDescriptor!.descriptor!.set;
+                }
+
                 Object.defineProperty(element, caseSensitiveDescriptor.caseSensitiveName, {
                     enumerable: caseSensitiveDescriptor.descriptor.enumerable || false,
                     configurable: true, // Whatever the original was, we need to be able to change this property from now on
                     get: caseSensitiveDescriptor.descriptor.get,
                     set: (value: any): void => {
-                        if (caseSensitiveDescriptor!.descriptor!.set) {
-                            caseSensitiveDescriptor!.descriptor!.set!.call(element, value);
+                        if (originalSetter) {
+                            originalSetter.call(element, value);
                         }
                         if (!context.preventCircularUpdate) {
                             updateValue(value);
@@ -26,6 +41,9 @@ export class PropertyHandler implements BindingHandler {
                         context.preventCircularUpdate = false;
                     }
                 });
+
+                let newDescriptor: PropertyDescriptor = Object.getOwnPropertyDescriptor(element, caseSensitiveDescriptor.caseSensitiveName)!;
+                (<any>newDescriptor.set)[PROPERTY_SETTER_SYMBOL] = originalSetter;
             }
             else { // create new property
                 let closureValue: any = observable.box();

@@ -5,7 +5,7 @@ import { BindingProperties } from './bindingEngine';
 
 export abstract class BindingHandler {
     abstract init?(element: HTMLElement, value: any, context: BindingContext, updateValue: (value: string) => void): void;
-    abstract update?(element: HTMLElement, value: string, context: BindingContext, change?: any): void;
+    abstract update?(element: HTMLElement, value: string | any, context: BindingContext, change?: any): void;
 }
 
 export class TextHandler implements BindingHandler {
@@ -158,6 +158,18 @@ export class HtmlHandler implements BindingHandler {
                     bind(<HTMLElement>element.childNodes[index], context.vm);
                 }
             }, 0);
+        }
+    }
+}
+
+export class ContentHandler implements BindingHandler {
+    update(element: HTMLElement, value: any, context: BindingContext, change: IArraySplice<any>): void {
+        if(value && value.contentTemplate) {
+            element.innerHTML = value.contentTemplate;
+            bind(element, value);
+        }
+        else {
+            element.innerText = '';
         }
     }
 }

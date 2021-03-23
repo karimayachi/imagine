@@ -1,5 +1,5 @@
 import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue, IObjectDidChange, Lambda } from 'mobx';
-import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler, VisibleHandler, ScopeHandler, IfHandler, TransformHandler } from './bindingHandlers';
+import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler, VisibleHandler, ScopeHandler, IfHandler, TransformHandler, ContentHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { PropertyHandler } from './propertyBinding';
 import { bind } from 'index';
@@ -458,6 +458,7 @@ BindingEngine.handlers['if'] = new IfHandler();
 BindingEngine.handlers['scope'] = new ScopeHandler();
 BindingEngine.handlers['html'] = new HtmlHandler();
 BindingEngine.handlers['visible'] = new VisibleHandler();
+BindingEngine.handlers['content'] = new ContentHandler();
 
 BindingEngine.handlers['transform'] = new TransformHandler();
 

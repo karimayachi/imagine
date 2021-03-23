@@ -18,34 +18,48 @@ export class BindingEngine {
         this.scopes = new Map<string, any>();
     }
 
-    parseBinding = (name: string, value: string, node: HTMLElement, vm: any): BindingProperties | null => {
-        let bindingProperties: BindingProperties = { handler: '', parameter: '', propertyName: value, vm: vm, scope: null, bindingValue: null, element: node };
+    parseBinding = (key: string, value: string, node: HTMLElement, vm: any): BindingProperties | null => {
+        let name: string;
+        let parsedValue: string;
+        let operator: string = key[0];
 
-        switch (name[0]) {
+        if(key.length === 1) {  // key is in form '@="{key: foreach, value: author.publications}"' or '#="{key: click, value: doSomething}"'
+            let json: {key:string, value: string} = JSON.parse(value.replace(/'/g, "\""));
+            name = json.key;
+            parsedValue = json.value;
+        }
+        else {                  // key is in form '@foreach="author.publications"' or '#click="doSomething"'
+            name = key.substr(1); 
+            parsedValue = value;
+        }
+
+        let bindingProperties: BindingProperties = { handler: '', parameter: '', propertyName: parsedValue, vm: vm, scope: null, bindingValue: null, element: node };
+        
+        switch (operator) {
             case '@':
-                if (BindingEngine.handlers[name.substr(1)]) {
-                    bindingProperties.handler = name.substr(1);
+                if (BindingEngine.handlers[name]) {
+                    bindingProperties.handler = name;
                 }
                 else {
-                    throw (`Unknown binding '${name.substr(1)}'`);
+                    throw (`Unknown binding '${name}'`);
                 }
                 break;
             case ':':
                 bindingProperties.handler = '__property';
-                bindingProperties.parameter = name.substr(1);
+                bindingProperties.parameter = name;
                 break;
             case '_':
                 bindingProperties.handler = '__attribute';
-                bindingProperties.parameter = name.substr(1);
+                bindingProperties.parameter = name;
                 break;
             case '#':
                 bindingProperties.handler = '__event';
-                bindingProperties.parameter = name.substr(1);
+                bindingProperties.parameter = name;
                 break;
             default:
                 return null;
         }
-
+        
         /* Parse the passed value. THIS IS BY NO MEANS A COMPLETE PARSER, IT ONLY HANDLES SOME STRAIGHTFORWARD CASES FOR THE PROOF OF CONCEPT!
          * It can be
          * - primitive (<namespace.>propertyName or 'this'). I.e. person, person.firstName, this, someNamedScope.this, someNamedScope.getNames
@@ -59,8 +73,8 @@ export class BindingEngine {
         let compStringRegEx: RegExp = /^([\w.]+)\s*==\s*'([\w\s:\-?!+\/#=]+)'\s*$/gm;
         let compNumberRegEx: RegExp = /^([\w.]+)\s*==\s*([0-9]+)\s*$/gm;
 
-        if (value.match(primitiveRegEx)) { // primitive
-            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, value, name, value, node) || {};
+        if (parsedValue.match(primitiveRegEx)) { // primitive
+            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parsedValue, name, parsedValue, node) || {};
             bindingProperties.propertyName = propertyName || bindingProperties.propertyName;
             bindingProperties.scope = scope;
 
@@ -86,8 +100,8 @@ export class BindingEngine {
                 }
             }
             else { // probably stop, but first check for 1 special case: a string is passed in stead of a property
-                if (value.indexOf('.') < 0) { // treat as string.. only used for scope-binding.. find a cleaner solution than to mix string syntax with parameter syntax
-                    bindingProperties.bindingValue = value;
+                if (parsedValue.indexOf('.') < 0) { // treat as string.. only used for scope-binding.. find a cleaner solution than to mix string syntax with parameter syntax
+                    bindingProperties.bindingValue = parsedValue;
                     bindingProperties.scope = vm;
                 }
                 else {
@@ -95,10 +109,10 @@ export class BindingEngine {
                 }
             }
         }
-        else if (value.match(ternaryRegEx)) { // ternary conditional
-            let parts: RegExpExecArray = ternaryRegEx.exec(value)!;
+        else if (parsedValue.match(ternaryRegEx)) { // ternary conditional
+            let parts: RegExpExecArray = ternaryRegEx.exec(parsedValue)!;
             let conditional: string = parts[1];
-            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, conditional, name, value, node) || {};
+            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, conditional, name, parsedValue, node) || {};
             if (propertyName === undefined) return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
 
             /* in theory, you could use 'this' here if you're in a foreach iterating over an array of observable booleans
@@ -123,11 +137,11 @@ export class BindingEngine {
                 return null;
             }
         }
-        else if (value.match(compNumberRegEx) || value.match(compStringRegEx)) { // comparison conditional
-            let parts: RegExpExecArray = value.match(compStringRegEx) ? compStringRegEx.exec(value)! : compNumberRegEx.exec(value)!;
+        else if (parsedValue.match(compNumberRegEx) || parsedValue.match(compStringRegEx)) { // comparison conditional
+            let parts: RegExpExecArray = parsedValue.match(compStringRegEx) ? compStringRegEx.exec(parsedValue)! : compNumberRegEx.exec(parsedValue)!;
             let conditional: string = parts[1];
-            let condition: string | number = value.match(compStringRegEx) ? parts[2] : parseInt(parts[2]);
-            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, conditional, name, value, node) || {};
+            let condition: string | number = parsedValue.match(compStringRegEx) ? parts[2] : parseInt(parts[2]);
+            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, conditional, name, parsedValue, node) || {};
             if (propertyName === undefined) return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
 
             if (propertyName in scope) {
@@ -141,8 +155,8 @@ export class BindingEngine {
                 return null;
             }
         }
-        else if (value[0] == '!') { // simplified negation
-            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, value.substr(1), name, value, node) || {};
+        else if (parsedValue[0] == '!') { // simplified negation
+            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parsedValue.substr(1), name, parsedValue, node) || {};
             if (propertyName === undefined) return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
 
             let bindingValue: IComputedValue<boolean> = computed((): boolean => !scope[<string>propertyName]);
@@ -151,15 +165,15 @@ export class BindingEngine {
             bindingProperties.bindingValue = bindingValue;
             bindingProperties.scope = scope;
         }
-        else if (value.indexOf('+') > 0) { // simple concatenation
-            let elements: string[] = value.split('+');
+        else if (parsedValue.indexOf('+') > 0) { // simple concatenation
+            let elements: string[] = parsedValue.split('+');
             elements = elements.map(item => item.trim());
             let stringRegex: RegExp = /^'([\w#/\s()]+)'$/gm;
 
             let allBindingsParsed = true;
             for (let i = 0; i < elements.length; i++) {
                 if (!elements[i].match(stringRegex)) {
-                    let { propertyName } = this.resolveScopeAndCreateDependencyTree(vm, elements[i], name, value, node) || {};
+                    let { propertyName } = this.resolveScopeAndCreateDependencyTree(vm, elements[i], name, parsedValue, node) || {};
                     if (propertyName === undefined) {
                         allBindingsParsed = false;
                         continue; // wasn't able to parse binding. maybe dependencyTree will pick it up later
@@ -177,7 +191,7 @@ export class BindingEngine {
                         concatenatedString += stringRegex.exec(elements[i])![1];
                     }
                     else {
-                        let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, elements[i], name, value, node)!;
+                        let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, elements[i], name, parsedValue, node)!;
 
                         if (propertyName in scope) {
                             concatenatedString += scope[propertyName];
@@ -188,7 +202,7 @@ export class BindingEngine {
                 return concatenatedString;
             });
 
-            bindingProperties.propertyName = value.substr(1);
+            bindingProperties.propertyName = parsedValue.substr(1);
             bindingProperties.bindingValue = bindingValue;
         }
 

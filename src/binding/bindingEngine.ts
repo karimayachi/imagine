@@ -416,16 +416,20 @@ export class BindingEngine {
 
     getTransformFor = (element: HTMLElement, target: string): Function | { read: Function, write: Function } | null => {
         let id: string = 'transform:' + target;
-
+        
         if(this.boundElements.has(element) && this.boundElements.get(element)!.has(id)) {
             return this.boundElements.get(element)!.get(id)!.vm[this.boundElements.get(element)!.get(id)!.propertyName];
         }
-        else if(element.parentElement === null) {
-            return null;
-        }
-        else {
+        else if(element.parentElement !== null) {
             return this.getTransformFor(element.parentElement, target);
         }
+        // else if(element.parentNode instanceof DocumentFragment) {
+        //     console.dir('SHADOW')
+        //     return null;
+        //     //return this.getTransformFor((<any>element.getRootNode()).host, target);
+        // }
+        
+        return null;
     }
 
     private unwrap(property: any): any {

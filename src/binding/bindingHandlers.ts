@@ -75,7 +75,17 @@ export class EventHandler implements BindingHandler {
 
 export class AttributeHandler implements BindingHandler {
     update(element: HTMLElement, value: string, context: BindingContext): void {
-        element.setAttribute(context.parameter!, value);
+        setTimeout(() => {
+            let transform = <Function | null>bindingEngine.getTransformFor(element, 'attribute.' + context.parameter);
+
+            /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
+            if (transform) {
+                element.setAttribute(context.parameter!, transform(value));
+            }
+            else {
+                element.setAttribute(context.parameter!, value);
+            }
+        }, 0);
     }
 }
 
@@ -164,7 +174,7 @@ export class HtmlHandler implements BindingHandler {
 
 export class ContentHandler implements BindingHandler {
     update(element: HTMLElement, value: any, context: BindingContext, change: IArraySplice<any>): void {
-        if(value && value.contentTemplate) {
+        if (value && value.contentTemplate) {
             element.innerHTML = value.contentTemplate;
             bind(element, value);
         }
@@ -269,7 +279,7 @@ export class ForEachHandler implements BindingHandler {
                                     propertyName: 'selected',
                                     bindingValue: vm.selected,
                                     scope: vm,
-                                    vm: vm, 
+                                    vm: vm,
                                     parameter: 'selected',
                                     element: itemElement
                                 };
@@ -280,7 +290,7 @@ export class ForEachHandler implements BindingHandler {
                     }
                 }
 
-                if(index !== undefined) {
+                if (index !== undefined) {
                     element.insertBefore(content, element.children[index]);
                 }
                 else {

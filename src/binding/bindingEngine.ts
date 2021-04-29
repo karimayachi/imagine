@@ -74,7 +74,7 @@ export class BindingEngine {
         let compNumberRegEx: RegExp = /^([\w.]+)\s*==\s*([0-9]+)\s*$/gm;
 
         if (parsedValue.match(primitiveRegEx)) { // primitive
-            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parsedValue, name, parsedValue, node) || {};
+            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parsedValue, operator + name, parsedValue, node) || {};
             bindingProperties.propertyName = propertyName || bindingProperties.propertyName;
             bindingProperties.scope = scope;
 
@@ -112,7 +112,7 @@ export class BindingEngine {
         else if (parsedValue.match(ternaryRegEx)) { // ternary conditional
             let parts: RegExpExecArray = ternaryRegEx.exec(parsedValue)!;
             let conditional: string = parts[1];
-            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, conditional, name, parsedValue, node) || {};
+            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, conditional, operator + name, parsedValue, node) || {};
             if (propertyName === undefined) return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
 
             /* in theory, you could use 'this' here if you're in a foreach iterating over an array of observable booleans
@@ -141,7 +141,7 @@ export class BindingEngine {
             let parts: RegExpExecArray = parsedValue.match(compStringRegEx) ? compStringRegEx.exec(parsedValue)! : compNumberRegEx.exec(parsedValue)!;
             let conditional: string = parts[1];
             let condition: string | number = parsedValue.match(compStringRegEx) ? parts[2] : parseInt(parts[2]);
-            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, conditional, name, parsedValue, node) || {};
+            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, conditional, operator + name, parsedValue, node) || {};
             if (propertyName === undefined) return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
 
             if (propertyName in scope) {
@@ -156,7 +156,7 @@ export class BindingEngine {
             }
         }
         else if (parsedValue[0] == '!') { // simplified negation
-            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parsedValue.substr(1), name, parsedValue, node) || {};
+            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parsedValue.substr(1), operator + name, parsedValue, node) || {};
             if (propertyName === undefined) return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
 
             let bindingValue: IComputedValue<boolean> = computed((): boolean => !scope[<string>propertyName]);
@@ -173,7 +173,7 @@ export class BindingEngine {
             let allBindingsParsed = true;
             for (let i = 0; i < elements.length; i++) {
                 if (!elements[i].match(stringRegex)) {
-                    let { propertyName } = this.resolveScopeAndCreateDependencyTree(vm, elements[i], name, parsedValue, node) || {};
+                    let { propertyName } = this.resolveScopeAndCreateDependencyTree(vm, elements[i], operator + name, parsedValue, node) || {};
                     if (propertyName === undefined) {
                         allBindingsParsed = false;
                         continue; // wasn't able to parse binding. maybe dependencyTree will pick it up later
@@ -191,7 +191,7 @@ export class BindingEngine {
                         concatenatedString += stringRegex.exec(elements[i])![1];
                     }
                     else {
-                        let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, elements[i], name, parsedValue, node)!;
+                        let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, elements[i], operator + name, parsedValue, node)!;
 
                         if (propertyName in scope) {
                             concatenatedString += scope[propertyName];

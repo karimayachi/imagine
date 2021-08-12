@@ -169,7 +169,15 @@ export class BindingEngine {
             if(parsedAttribute === null) {
                 return null;
             }
-            parsedAttribute.parameter = name;
+
+            /* if the handler starts with __ it's a handler that requires extra info. e.g. __attribute or __property
+             * so register the transform to the complete path (e.g. attribute.style or property.maxCharacters)
+             * if it is a regular handler, just register the transform to the handler. (e.g. text or value)
+             */
+            parsedAttribute.parameter = bindingProperties.handler.startsWith('__') 
+                                        ? bindingProperties.handler.substr(2) + '.' + name
+                                        : name;
+
             this.bindInitPhase(parsedAttribute);
 
             /* register the regular binding */
@@ -464,7 +472,12 @@ export class BindingEngine {
     }
 
     private unwrap(property: any): any {
-        if (isObservableArray(property) || !isObservable(property)) {
+        /* for some reason any object with observable properties will pass the isObservable check
+         * and is in that regard indistinguishable from ObservableValues
+         * so check for the existence of .get on objects (yes, it could be that there is an unrelated function called get on the object -> we need a better checking mechanism)
+         */
+
+        if (isObservableArray(property) || !isObservable(property) || (typeof property === 'object' && typeof property.get !== 'function')) {
             return property;
         }
         else {

@@ -197,7 +197,7 @@ export class ForEachHandler implements BindingHandler {
         context.template = template;
     }
 
-    update(element: HTMLElement, value: any, context: BindingContext, change: IArraySplice<any> | IArrayChange): void {
+    update(element: HTMLElement & { selecteditems: any[], selecteditem: any }, value: any, context: BindingContext, change: IArraySplice<any> | IArrayChange): void {
         if (change && change.type === 'splice') {
             for (let item of change.added) {
                 addItem(item, change.index);
@@ -238,7 +238,11 @@ export class ForEachHandler implements BindingHandler {
                     let itemElement: HTMLElement = <HTMLElement>content.childNodes[i];
                     if (itemElement.nodeType === 1) {
                         setTimeout(() => { // Move to back of callstack, so Binding is done first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
-                            if ('selecteditem' in element && 'selected' in itemElement) {
+                            if ('selected' in itemElement && ('selecteditem' in element || 'selecteditems' in element)) {
+                                if ('selecteditems' in element && (<any>element).selecteditems === undefined) { /* we don't have to do this for every added item, but this setTimeout has the right timing. Maybe optimize it later */
+                                    (<any>element).selecteditems = [];
+                                }
+
                                 let vm = {
                                     selected: observable.box(false)
                                 };
@@ -248,31 +252,69 @@ export class ForEachHandler implements BindingHandler {
                                 observe(vm.selected, change => {
                                     if (change.newValue === true && !innerPreventCircularUpdate) {
                                         innerPreventCircularUpdate = true;
-                                        (<any>element).selecteditem = item;
+                                        if ('selecteditem' in element) {
+                                            (<any>element).selecteditem = item;
+                                        }
+                                        if ('selecteditems' in element) {
+                                            if ((<any>element).selecteditems.indexOf(item) === -1) {
+                                                (<any>element).selecteditems.push(item);
+                                            }
+                                        }
+                                    }
+                                    else if (change.newValue === false && !innerPreventCircularUpdate && 'selecteditems' in element) {
+                                        innerPreventCircularUpdate = true;
+                                        if ((<any>element).selecteditems.indexOf(item) > -1) {
+                                            (<any>element).selecteditems.splice((<any>element).selecteditems.indexOf(item), 1);
+                                        }
                                     }
                                     innerPreventCircularUpdate = false;
                                 });
 
-                                if ((<any>element).selecteditem === item) {
-                                    setTimeout(() => {// Move to back of callstack -- just moving to back of stack isn't even enough: set a small timeout.. This is very dangerous. TODO: Replace with polling for selected-property
-                                        (<any>itemElement).selected = true;
-                                    }, 10);
+                                if ('selecteditem' in element) {
+                                    if ((<any>element).selecteditem === item) {
+                                        setTimeout(() => {// Move to back of callstack -- just moving to back of stack isn't even enough: set a small timeout.. This is very dangerous. TODO: Replace with polling for selected-property
+                                            (<any>itemElement).selected = true;
+                                        }, 10);
+                                    }
+
+                                    observe(element, 'selecteditem', change => {
+                                        if (!innerPreventCircularUpdate) {
+                                            innerPreventCircularUpdate = true;
+
+                                            if (change.newValue === item) {
+                                                (<any>itemElement).selected = true;
+                                            }
+                                            else {
+                                                (<any>itemElement).selected = false;
+                                            }
+                                        }
+
+                                        innerPreventCircularUpdate = false;
+                                    });
                                 }
 
-                                observe(element, 'selecteditem', change => {
-                                    if (!innerPreventCircularUpdate) {
-                                        innerPreventCircularUpdate = true;
-
-                                        if (change.newValue === item) {
+                                if ('selecteditems' in element) {
+                                    if ((<any>element).selecteditems.indexOf(item) > -1) {
+                                        setTimeout(() => {// Move to back of callstack -- just moving to back of stack isn't even enough: set a small timeout.. This is very dangerous. TODO: Replace with polling for selected-property
                                             (<any>itemElement).selected = true;
-                                        }
-                                        else {
-                                            (<any>itemElement).selected = false;
-                                        }
+                                        }, 10);
                                     }
 
-                                    innerPreventCircularUpdate = false;
-                                });
+                                    observe(element, 'selecteditems', change => {
+                                        if (!innerPreventCircularUpdate) {
+                                            innerPreventCircularUpdate = true;
+
+                                            if ((<any[]>change.newValue).indexOf(item) > -1) {
+                                                (<any>itemElement).selected = true;
+                                            }
+                                            else {
+                                                (<any>itemElement).selected = false;
+                                            }
+                                        }
+
+                                        innerPreventCircularUpdate = false;
+                                    });
+                                }
 
                                 let bindingProperties: BindingProperties = {
                                     handler: '__property',

@@ -23,18 +23,18 @@ export class BindingEngine {
         let parsedValue: string;
         let operator: string = key[0];
 
-        if(key.length === 1) {  // key is in form '@="{key: foreach, value: author.publications}"' or '#="{key: click, value: doSomething}"'
-            let json: {key:string, value: string} = JSON.parse(value.replace(/'/g, "\""));
+        if (key.length === 1) {  // key is in form '@="{key: foreach, value: author.publications}"' or '#="{key: click, value: doSomething}"'
+            let json: { key: string, value: string } = JSON.parse(value.replace(/'/g, "\""));
             name = json.key;
             parsedValue = json.value;
         }
         else {                  // key is in form '@foreach="author.publications"' or '#click="doSomething"'
-            name = key.substr(1); 
+            name = key.substr(1);
             parsedValue = value;
         }
 
         let bindingProperties: BindingProperties = { handler: '', parameter: '', propertyName: parsedValue, vm: vm, scope: null, bindingValue: null, element: node };
-        
+
         switch (operator) {
             case '@':
                 if (BindingEngine.handlers[name]) {
@@ -59,19 +59,21 @@ export class BindingEngine {
             default:
                 return null;
         }
-        
+
         /* Parse the passed value. THIS IS BY NO MEANS A COMPLETE PARSER, IT ONLY HANDLES SOME STRAIGHTFORWARD CASES FOR THE PROOF OF CONCEPT!
          * It can be
          * - primitive (<namespace.>propertyName or 'this'). I.e. person, person.firstName, this, someNamedScope.this, someNamedScope.getNames
          * - a ternary conditional (<namespace.>propertyName ? '<string>' : '<string>'). I.e. person.isRetired ? 'retired' : 'still working'
          * - negation (!<namespace.>propertyName). I.e. !person.isRetired, !showMenu
          * - equality comparison (<namespace>.propertyName == 'some string' or <namespace>.propertyName == <number>)
-         * - concatenation (<namespace.>propertyName + '<string>' + ...) I.e. 'https://url.com/' + person.personalPage, better to use template literals
+         * - string concatenation (<namespace.>propertyName + '<string>' + ...) I.e. 'https://url.com/' + person.personalPage. TODO: better to use template literals
+         * - transforms (<namespace.>transform(<namespace.>propertyName)) I.e. stringToDate(article.createdAt)
          */
-        let primitiveRegEx: RegExp = /^[\w.]+$/gm;
-        let ternaryRegEx: RegExp = /^([\w.]+)\s*\?\s*'([\w\s:\-?!+\/#=]+)'\s*:\s*'([\w\s:\-?!+\/#=]+)'\s*$/gm;
-        let compStringRegEx: RegExp = /^([\w.]+)\s*==\s*'([\w\s:\-?!+\/#=]+)'\s*$/gm;
-        let compNumberRegEx: RegExp = /^([\w.]+)\s*==\s*([0-9]+)\s*$/gm;
+        const primitiveRegEx: RegExp = /^[\w.]+$/gm;
+        const ternaryRegEx: RegExp = /^([\w.]+)\s*\?\s*'([\w\s:\-?!+\/#=]+)'\s*:\s*'([\w\s:\-?!+\/#=]+)'\s*$/gm;
+        const compStringRegEx: RegExp = /^([\w.]+)\s*==\s*'([\w\s:\-?!+\/#=]+)'\s*$/gm;
+        const compNumberRegEx: RegExp = /^([\w.]+)\s*==\s*([0-9]+)\s*$/gm;
+        const transformRegEx: RegExp = /^(\S+)\((\S+)\)$/gm
 
         if (parsedValue.match(primitiveRegEx)) { // primitive
             let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parsedValue, operator + name, parsedValue, node) || {};
@@ -154,6 +156,29 @@ export class BindingEngine {
             else {
                 return null;
             }
+        }
+        else if (parsedValue.match(transformRegEx)) { // transformed binding
+            let parts: RegExpExecArray = transformRegEx.exec(parsedValue)!;
+            let transform: string = parts[1];
+            let binding: string = parts[2];
+
+            /* register the transform */
+            let parsedAttribute = this.parseBinding('@transform', transform, node, vm);
+            if(parsedAttribute === null) {
+                return null;
+            }
+            parsedAttribute.parameter = name;
+            this.bindInitPhase(parsedAttribute);
+
+            /* register the regular binding */
+            let parsedAttributeForBinding = this.parseBinding(key, binding, node, vm);
+            if(parsedAttributeForBinding === null) {
+                return null;
+            }
+            this.bindInitPhase(parsedAttributeForBinding);
+            this.bindUpdatePhase(parsedAttributeForBinding);
+
+            return null;
         }
         else if (parsedValue[0] == '!') { // simplified negation
             let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parsedValue.substr(1), operator + name, parsedValue, node) || {};
@@ -320,9 +345,9 @@ export class BindingEngine {
 
             /* rebind init phase */
             this.bindInitPhase(newBindingProperties, true);
-            
+
             /* restore template if there was one before */
-            if(this.boundElements.has(originalElement) && oldBindingContextTemplate !== undefined) {
+            if (this.boundElements.has(originalElement) && oldBindingContextTemplate !== undefined) {
                 let contextsForElement: Map<string, BindingContext> = this.boundElements.get(originalElement)!;
                 let contextIdentifier: string = `${newBindingProperties.handler}${newBindingProperties.parameter ? ':' + newBindingProperties.parameter : ''}`;
 
@@ -365,7 +390,7 @@ export class BindingEngine {
             currentHandler.init?.call(this, bindingProperties.element, this.unwrap(bindingProperties.bindingValue), context, (value: any): void => { // for event bindings this updateFunction should not be provided
                 if (bindingProperties.propertyName !== 'this') {
                     context.preventCircularUpdate = true;
-                    if(isObservableArray(bindingProperties.bindingValue)) {
+                    if (isObservableArray(bindingProperties.bindingValue)) {
                         bindingProperties.scope[bindingProperties.propertyName] = value;
                     }
                     else if (isObservable(bindingProperties.bindingValue)) {
@@ -416,11 +441,11 @@ export class BindingEngine {
 
     getTransformFor = (element: HTMLElement, target: string): Function | { read: Function, write: Function } | null => {
         let id: string = 'transform:' + target;
-        
-        if(this.boundElements.has(element) && this.boundElements.get(element)!.has(id)) {
+
+        if (this.boundElements.has(element) && this.boundElements.get(element)!.has(id)) {
             return this.boundElements.get(element)!.get(id)!.vm[this.boundElements.get(element)!.get(id)!.propertyName];
         }
-        else if(element.parentElement !== null) {
+        else if (element.parentElement !== null) {
             return this.getTransformFor(element.parentElement, target);
         }
         // else if(element.parentNode instanceof DocumentFragment) {
@@ -428,7 +453,7 @@ export class BindingEngine {
         //     return null;
         //     //return this.getTransformFor((<any>element.getRootNode()).host, target);
         // }
-        
+
         return null;
     }
 

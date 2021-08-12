@@ -2,7 +2,7 @@ import { isObservableProp, observe, IValueDidChange, isObservableArray, isObserv
 import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler, VisibleHandler, ScopeHandler, IfHandler, TransformHandler, ContentHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { PropertyHandler } from './propertyBinding';
-import { bind } from 'index';
+import { bind } from '../index';
 
 interface BindingHandlers {
     [key: string]: BindingHandler
@@ -74,6 +74,8 @@ export class BindingEngine {
         const compStringRegEx: RegExp = /^([\w.]+)\s*==\s*'([\w\s:\-?!+\/#=]+)'\s*$/gm;
         const compNumberRegEx: RegExp = /^([\w.]+)\s*==\s*([0-9]+)\s*$/gm;
         const transformRegEx: RegExp = /^(\S+)\((\S+)\)$/gm
+
+        /* TODO: use dependency injection for the different parsers below? */
 
         if (parsedValue.match(primitiveRegEx)) { // primitive
             let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parsedValue, operator + name, parsedValue, node) || {};
@@ -254,7 +256,7 @@ export class BindingEngine {
             let disposers: Lambda[] = []; /* will the array of disposers be disposed itself? */
             let storedChildElements: DocumentFragment = document.createDocumentFragment();  /* remove and store all child elements if the binding failed. If retrying, we add them back in, but for now just assume this whole tree to be corrupted */
 
-            if (finalScope == null) { /* binding failed. save and remove the childelements */
+            if (finalScope == null && originalElement.childNodes.length > 0) { /* binding failed. save and remove the childelements */
                 while (originalElement.childNodes.length > 0) {
                     storedChildElements.appendChild(originalElement.childNodes[0]);
                 }
@@ -271,7 +273,11 @@ export class BindingEngine {
 
                     /* restore the original DOM structure and try to bind again */
                     while (storedChildElements.childNodes.length > 0) {
-                        originalElement.appendChild(storedChildElements.childNodes[0]);
+                        const nodeToRestore = storedChildElements.childNodes[0];
+
+                        originalElement.appendChild(nodeToRestore);
+                        /* these restored, fresh elements are plain html without any prior bindings, so they must be bound (not re-bound) */
+                        bind(<HTMLElement>nodeToRestore, scope);
                     }
 
                     this.rebind(originalName, originalValue, scope, originalElement);

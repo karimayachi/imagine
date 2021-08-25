@@ -166,20 +166,22 @@ export class BindingEngine {
 
             /* register the transform */
             let parsedAttribute = this.parseBinding('@transform', transform, node, vm);
-            if(parsedAttribute === null) {
-                return null;
+
+            if(parsedAttribute === null || typeof parsedAttribute.bindingValue === 'string') { // also check for string binding (this comes from line 107 -- special SCOPE handling).. very ugly, should be replaced
+                console.warn(`[Imagine] couldn\'t find transform \'${transform}\'`);
             }
+            else {
+                /* if the handler starts with __ it's a handler that requires extra info. e.g. __attribute or __property
+                            * so register the transform to the complete path (e.g. attribute.style or property.maxCharacters)
+                            * if it is a regular handler, just register the transform to the handler. (e.g. text or value)
+                            */
+                parsedAttribute.parameter = bindingProperties.handler.startsWith('__') 
+                ? bindingProperties.handler.substr(2) + '.' + name
+                : name;
 
-            /* if the handler starts with __ it's a handler that requires extra info. e.g. __attribute or __property
-             * so register the transform to the complete path (e.g. attribute.style or property.maxCharacters)
-             * if it is a regular handler, just register the transform to the handler. (e.g. text or value)
-             */
-            parsedAttribute.parameter = bindingProperties.handler.startsWith('__') 
-                                        ? bindingProperties.handler.substr(2) + '.' + name
-                                        : name;
-
-            this.bindInitPhase(parsedAttribute);
-
+                this.bindInitPhase(parsedAttribute);
+            }
+            
             /* register the regular binding */
             let parsedAttributeForBinding = this.parseBinding(key, binding, node, vm);
             if(parsedAttributeForBinding === null) {
@@ -317,7 +319,7 @@ export class BindingEngine {
                     scope = currentScope[levels[0]];
                 }
                 else {
-                    throw (`Undefined scope: ${levels[0]}`);
+                    throw (`[Imagine] undefined scope: ${levels[0]}`);
                 }
 
                 if (scope && levels[1] in scope) {
@@ -334,7 +336,7 @@ export class BindingEngine {
                     scope = currentScope[levels[0]];
                 }
                 else {
-                    throw (`Undefined scope: ${levels[0]}`);
+                    throw (`[Imagine] undefined scope: ${levels[0]}`);
                 }
 
                 return this.recursiveResolveScope(scope, levels.slice(1).join('.'), dependencyTree);

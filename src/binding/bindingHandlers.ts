@@ -8,6 +8,15 @@ export abstract class BindingHandler {
     abstract update?(element: HTMLElement, value: string | any, context: BindingContext, change?: any): void;
 }
 
+export class ComponentHandler implements BindingHandler {
+    update(element: HTMLElement, value: any): void {
+        if(value instanceof HTMLElement && value.tagName.includes('-')) { // assume value is a Web Component
+            element.innerHTML = ''; // performance hit?
+            element.appendChild(value);
+        }
+    }
+}
+
 export class TextHandler implements BindingHandler {
     update(element: HTMLElement, value: string): void {
         let transform = <Function | null>bindingEngine.getTransformFor(element, 'text');

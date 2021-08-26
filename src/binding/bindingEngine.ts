@@ -159,7 +159,7 @@ export class BindingEngine {
                 return null;
             }
         }
-        else if (parsedValue.match(transformRegEx)) { // transformed binding
+        else if (parsedValue.match(transformRegEx)) { // transform binding
             let parts: RegExpExecArray = transformRegEx.exec(parsedValue)!;
             let transform: string = parts[1];
             let binding: string = parts[2];

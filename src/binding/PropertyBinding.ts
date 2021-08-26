@@ -28,9 +28,9 @@ export class PropertyHandler implements BindingHandler {
                     originalSetter = caseSensitiveDescriptor!.descriptor!.set;
                 }
 
-                let transform = <{ read: Function, write: Function } | null>bindingEngine.getTransformFor(element, caseSensitiveDescriptor!.caseSensitiveName!);
+                let transform = <{ read: Function, write: Function } | null>bindingEngine.getTransformFor(element, 'property.' + caseSensitiveDescriptor!.caseSensitiveName!);
                 /* CHECK FOR TRANSFORM ONLY ON BINDING OF THE PROPERTY.. IS THIS ENOUGH? */
-
+                
                 Object.defineProperty(element, caseSensitiveDescriptor.caseSensitiveName, {
                     enumerable: caseSensitiveDescriptor.descriptor.enumerable || false,
                     configurable: true, // Whatever the original was, we need to be able to change this property from now on
@@ -68,7 +68,7 @@ export class PropertyHandler implements BindingHandler {
             else { // create new property
                 let closureValue: any = observable.box();
                 let newProperties: object = {};
-                let transform = <{ read: Function, write: Function } | null>bindingEngine.getTransformFor(element, propertyName);
+                let transform = <{ read: Function, write: Function } | null>bindingEngine.getTransformFor(element, 'property.' + propertyName);
                 /* CHECK FOR TRANSFORM ONLY ON CREATION OF THE PROPERTY.. IS THIS ENOUGH? */
 
                 Object.defineProperty(newProperties, propertyName, {

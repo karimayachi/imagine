@@ -10,7 +10,7 @@ export abstract class BindingHandler {
 
 export class ComponentHandler implements BindingHandler {
     update(element: HTMLElement, value: any): void {
-        if(value instanceof HTMLElement && value.tagName.includes('-')) { // assume value is a Web Component
+        if (value instanceof HTMLElement && value.tagName.includes('-')) { // assume value is a Web Component
             element.innerHTML = ''; // performance hit?
             element.appendChild(value);
         }
@@ -19,10 +19,13 @@ export class ComponentHandler implements BindingHandler {
 
 export class TextHandler implements BindingHandler {
     update(element: HTMLElement, value: string): void {
-        let transform = <Function | null>bindingEngine.getTransformFor(element, 'text');
+        let transform = <{ read: Function } | Function | null>bindingEngine.getTransformFor(element, 'text');
 
         /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
-        if (transform) {
+        if (transform && (<{ read: Function }>transform).read && typeof (<{ read: Function }>transform).read === 'function') {
+            element.textContent = (<{ read: Function }>transform).read(value);
+        }
+        else if (transform && typeof transform === 'function') {
             element.textContent = transform(value);
         }
         else {
@@ -60,11 +63,14 @@ export class ValueHandler implements BindingHandler {
     }
 
     update(element: HTMLElement, value: string): void {
-        let transform = <{ read: Function, write: Function } | null>bindingEngine.getTransformFor(element, 'value');
+        let transform = <{ read: Function } | Function | null>bindingEngine.getTransformFor(element, 'value');
 
         /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
-        if (transform && transform.read) {
-            (<HTMLInputElement>element).value = transform.read(value);
+        if (transform && (<{ read: Function }>transform).read && typeof (<{ read: Function }>transform).read === 'function') {
+            (<HTMLInputElement>element).value = (<{ read: Function }>transform).read(value);
+        }
+        else if (transform && typeof transform === 'function') {
+            (<HTMLInputElement>element).value = transform(value);
         }
         else {
             (<HTMLInputElement>element).value = value;
@@ -85,10 +91,13 @@ export class EventHandler implements BindingHandler {
 export class AttributeHandler implements BindingHandler {
     update(element: HTMLElement, value: string, context: BindingContext): void {
         setTimeout(() => {
-            let transform = <Function | null>bindingEngine.getTransformFor(element, 'attribute.' + context.parameter);
+            let transform = <{ read: Function } | Function | null>bindingEngine.getTransformFor(element, 'attribute.' + context.parameter);
 
             /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
-            if (transform) {
+            if (transform && (<{ read: Function }>transform).read && typeof (<{ read: Function }>transform).read === 'function') {
+                element.setAttribute(context.parameter!, (<{ read: Function }>transform).read(value));
+            }
+            else if (transform && typeof transform === 'function') {
                 element.setAttribute(context.parameter!, transform(value));
             }
             else {
@@ -161,10 +170,13 @@ export class HtmlHandler implements BindingHandler {
 
         if (value !== undefined && value !== null) {
             let template: HTMLTemplateElement = document.createElement('template');
-            let transform = <Function | null>bindingEngine.getTransformFor(element, 'html');
+            let transform = <{ read: Function } | Function | null>bindingEngine.getTransformFor(element, 'html');
 
             /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
-            if (transform) {
+            if (transform && (<{ read: Function }>transform).read && typeof (<{ read: Function }>transform).read === 'function') {
+                template.innerHTML = (<{ read: Function }>transform).read(value);
+            }
+            else if (transform && typeof transform === 'function') {
                 template.innerHTML = transform(value);
             }
             else {

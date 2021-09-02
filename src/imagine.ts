@@ -99,7 +99,7 @@ export class Imagine {
     }
 
     private bindInlinedText(node: HTMLElement, vm: any) {
-        let templateLiteralRegEx: RegExp = /\${[a-zA-Z.\s?:']*}/gm;
+        let templateLiteralRegEx: RegExp = /\${[a-zA-Z.()\s?:']*}/gm;
         if (templateLiteralRegEx.test(node.textContent!)) {
             let stringParts: string[] = node.textContent!.split(templateLiteralRegEx);
             let matches: RegExpMatchArray | null = node.textContent!.match(templateLiteralRegEx);

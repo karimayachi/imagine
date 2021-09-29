@@ -6,6 +6,8 @@ export class BindingContext {
     parameter?: string;
     bindingData?: any; /* property used for bindings to store arbitrary data specific to that binding. Maybe 'parameter' should be consolidated with bindingData? */
     preventCircularUpdate: boolean;
+    originalKey?: string; /* store original key and value for if we need to rebind this element/context */
+    originalValue?: string; /* store original key and value for if we need to rebind this element/context */
 
     constructor() {
         this.propertyName = '';

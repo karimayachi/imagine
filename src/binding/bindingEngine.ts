@@ -60,7 +60,7 @@ export class BindingEngine {
                 return null;
         }
 
-        /* Parse the passed value. THIS IS BY NO MEANS A COMPLETE PARSER, IT ONLY HANDLES SOME STRAIGHTFORWARD CASES FOR THE PROOF OF CONCEPT!
+        /* Parse the passed value. THIS IS BY NO MEANS A COMPLETE PARSER, IT ONLY HANDLES SOME STRAIGHTFORWARD CASES AS A PROOF OF CONCEPT!
          * It can be
          * - primitive (<namespace.>propertyName or 'this'). I.e. person, person.firstName, this, someNamedScope.this, someNamedScope.getNames
          * - a ternary conditional (<namespace.>propertyName ? '<string>' : '<string>'). I.e. person.isRetired ? 'retired' : 'still working'
@@ -167,24 +167,24 @@ export class BindingEngine {
             /* register the transform */
             let parsedAttribute = this.parseBinding('@transform', transform, node, vm);
 
-            if(parsedAttribute === null || typeof parsedAttribute.bindingValue === 'string') { // also check for string binding (this comes from line 107 -- special SCOPE handling).. very ugly, should be replaced
+            if (parsedAttribute === null || typeof parsedAttribute.bindingValue === 'string') { // also check for string binding (this comes from line 107 -- special SCOPE handling).. very ugly, should be replaced
                 console.warn(`[Imagine] couldn\'t find transform \'${transform}\'`);
             }
             else {
                 /* if the handler starts with __ it's a handler that requires extra info. e.g. __attribute or __property
-                            * so register the transform to the complete path (e.g. attribute.style or property.maxCharacters)
-                            * if it is a regular handler, just register the transform to the handler. (e.g. text or value)
-                            */
-                parsedAttribute.parameter = bindingProperties.handler.startsWith('__') 
-                ? bindingProperties.handler.substr(2) + '.' + name
-                : name;
+                 * so register the transform to the complete path (e.g. attribute.style or property.maxCharacters)
+                 * if it is a regular handler, just register the transform to the handler. (e.g. text or value)
+                 */
+                parsedAttribute.parameter = bindingProperties.handler.startsWith('__')
+                    ? bindingProperties.handler.substr(2) + '.' + name
+                    : name;
 
                 this.bindInitPhase(parsedAttribute);
             }
-            
+
             /* register the regular binding */
             let parsedAttributeForBinding = this.parseBinding(key, binding, node, vm);
-            if(parsedAttributeForBinding === null) {
+            if (parsedAttributeForBinding === null) {
                 return null;
             }
             this.bindInitPhase(parsedAttributeForBinding);
@@ -343,7 +343,36 @@ export class BindingEngine {
         }
     }
 
-    private rebind(originalName: string, originalValue: string, originalVM: any, originalElement: HTMLElement): void {
+    recursiveRebindAll = (element: HTMLElement, vm: any): void => {
+        let childrenAreUnderControl: boolean = false;
+
+        if (this.boundElements.has(element)) {
+            const contextsForElement: Map<string, BindingContext> = this.boundElements.get(element)!;
+            const contextsToIterateOver: BindingContext[] = [];
+
+            /* don't iterate over the Map we're altering. So first store in temp array (contextsToIterateOver) */
+            contextsForElement.forEach((context: BindingContext) => {
+                contextsToIterateOver.push(context);
+            });
+
+            for(let context of contextsToIterateOver) {
+                if (context.originalKey && context.originalValue) { // I believe only template-context created in 'bind' don't fill this requirement, but I can't remember what that context is for in the first place
+                    childrenAreUnderControl = this.rebind(context.originalKey, context.originalValue, vm, element) || childrenAreUnderControl;
+                }
+            }
+        }
+
+        if (!childrenAreUnderControl && !element.tagName.includes('-')) { // if tagname contains '-' assume WebComponent
+            for (let i = 0; i < element.children.length; i++) {
+                this.recursiveRebindAll(<HTMLElement>element.children[i], vm);
+            };
+        }
+    }
+
+    /**
+     * @returns true if child nodes were updated during rebind, false otherwise
+     */
+    private rebind(originalName: string, originalValue: string, originalVM: any, originalElement: HTMLElement): boolean {
         let newBindingProperties = this.parseBinding(originalName, originalValue, originalElement, originalVM);
         let oldBindingContextTemplate: any;
 
@@ -354,30 +383,44 @@ export class BindingEngine {
                 let contextIdentifier: string = `${newBindingProperties.handler}${newBindingProperties.parameter ? ':' + newBindingProperties.parameter : ''}`;
 
                 if (contextsForElement.has(contextIdentifier)) {
-                    oldBindingContextTemplate = contextsForElement.get(contextIdentifier)?.template; // Save a template if there was one... For if and foreach bindings that loose their template otherwise...
+                    oldBindingContextTemplate = contextsForElement.get(contextIdentifier)?.template; // Save a template if there was one... For 'if' and 'foreach' bindings that loose their template otherwise...
                     contextsForElement.delete(contextIdentifier);
                 }
             }
 
             /* rebind init phase */
-            this.bindInitPhase(newBindingProperties, true);
+            const newContext: BindingContext = this.bindInitPhase(newBindingProperties, true);
+            newContext.originalKey = originalName;
+            newContext.originalValue = originalValue;
 
             /* restore template if there was one before */
-            if (this.boundElements.has(originalElement) && oldBindingContextTemplate !== undefined) {
-                let contextsForElement: Map<string, BindingContext> = this.boundElements.get(originalElement)!;
-                let contextIdentifier: string = `${newBindingProperties.handler}${newBindingProperties.parameter ? ':' + newBindingProperties.parameter : ''}`;
-
-                if (contextsForElement.has(contextIdentifier)) {
-                    contextsForElement.get(contextIdentifier)!.template = oldBindingContextTemplate;
-                }
+            if (oldBindingContextTemplate !== undefined) {
+                newContext.template = oldBindingContextTemplate;
             }
 
             /* rebind update phase */
             this.bindUpdatePhase(newBindingProperties);
         }
+
+        /* hardcoded which handlers have their child elements under control.
+         * temporary solution. Better solution: have the handlers return wether or not
+         * they control their children after the Init phase
+         */
+        if (newBindingProperties?.handler === 'foreach' ||
+            newBindingProperties?.handler === 'if' ||
+            newBindingProperties?.handler === 'html' ||
+            newBindingProperties?.handler === 'content' ||
+            newBindingProperties?.handler === 'context') {
+                return true;
+            }
+
+            return false;
     }
 
-    bindInitPhase = (bindingProperties: BindingProperties, rebind: boolean = false): void => {
+    /**
+     * @returns the created BindingContext or an existing if Init was called on already bound element
+     */
+    bindInitPhase = (bindingProperties: BindingProperties, rebind: boolean = false): BindingContext => {
         const currentHandler: BindingHandler = BindingEngine.handlers[bindingProperties.handler];
         let contextsForElement: Map<string, BindingContext>;
 
@@ -417,7 +460,11 @@ export class BindingEngine {
                     }
                 }
             });
+
+            return context;
         }
+
+        return contextsForElement.get(contextIdentifier)!;
     }
 
     bindUpdatePhase = (bindingProperties: BindingProperties): void => {

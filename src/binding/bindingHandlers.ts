@@ -207,16 +207,11 @@ export class ContentHandler implements BindingHandler {
 
 export class ForEachHandler implements BindingHandler {
     init(element: HTMLElement, _value: any, context: BindingContext, _updateValue: (value: string) => void): void {
-        /* save the childnodes as template in the context */
+        /* save the child elements as template in the context */
         let template: DocumentFragment = document.createDocumentFragment();
 
-        while (element.childNodes.length > 0) {
-            if (element.childNodes[0].nodeType === 3) { /* don't allow toplevel text-node in template. Browsers seem to add text-nodes left and right, so filter them out */
-                element.removeChild(element.childNodes[0]);
-            }
-            else {
-                template.appendChild(element.childNodes[0]);
-            }
+        while (element.children.length > 0) {
+            template.appendChild(element.children[0]);
         }
 
         /* set up a index-tracker between array and HTML-elements. Facilitates removing and replacing items and speeding up */
@@ -230,13 +225,13 @@ export class ForEachHandler implements BindingHandler {
         if (change && change.type === 'splice') { /* items are added or removed */
             /* remove items */
             if (change.removedCount > 0) {
-                for(let i = 0; i < change.removedCount; i++) {
-                    context.bindingData[change.index].forEach((element: HTMLElement) => { element.remove(); });
+                for (let i = 0; i < change.removedCount; i++) {
+                    context.bindingData[change.index].forEach((element: HTMLElement) => {element.remove(); });
                 }
-                
+
                 (<any[]>context.bindingData).splice(change.index, change.removed.length);
             }
-            
+
             /* add items */
             for (let i = change.addedCount - 1; i >= 0; i--) {
                 addItem(change.added[i], change.index);
@@ -244,10 +239,9 @@ export class ForEachHandler implements BindingHandler {
         }
         else if (change && change.type === 'update') {
             if (change.object === value) { /* an item IN the array is updated */
-                /* naive approach: don't rebind existing element, but first remove old item and add new at same position */
-                context.bindingData[change.index].forEach((element: HTMLElement) => { element.remove(); });
-                (<any[]>context.bindingData).splice(change.index, 1);
-                addItem(change.newValue, change.index);
+                context.bindingData[change.index].forEach((element: HTMLElement) => { 
+                    bindingEngine.recursiveRebindAll(element, change.newValue);
+                });
             }
             else { /* the complete array is swapped out for a new array */
                 element.innerHTML = ''; /* TODO: does this sufficiently trigger GC? do the bindings disappear from the weakmap AND underlying map? */
@@ -263,8 +257,6 @@ export class ForEachHandler implements BindingHandler {
                 addItem(item);
             }
         }
-
-        //console.log('CURRENT STATUS', context.bindingData);
 
         function addItem(item: any, index?: number): void {
             if (context.template) {

@@ -11,7 +11,7 @@ export class Imagine {
     }
 
     bind = (vm: any, element?: HTMLElement | DocumentFragment | null, debug?: boolean): void => {
-        if(debug) {
+        if (debug) {
             (<any>window).__debug_imagine = this;
         }
 
@@ -38,9 +38,9 @@ export class Imagine {
         for (let index = 0; index < rootNode.childNodes.length; index++) {
             children.push(rootNode.childNodes[index]);
         }
-        
+
         if (rootNode.nodeType === 1) {
-            if((<HTMLElement>rootNode).tagName === 'IMAGINE-TRANSFORM') {
+            if ((<HTMLElement>rootNode).tagName === 'IMAGINE-TRANSFORM') {
                 this.bindDirectives(<HTMLElement>rootNode, vm);
             }
             else {
@@ -65,23 +65,26 @@ export class Imagine {
     }
 
     private bindAttributes(node: HTMLElement, vm: any) {
-        let allAttributes: BindingProperties[] = [];
+        let allAttributes: { key: string, value: string, bindingProperties: BindingProperties }[] = [];
+
         for (let index = node.attributes.length - 1; index >= 0; index--) {
-            let parsedAttribute = this.bindingEngine.parseBinding(node.attributes[index].name, node.attributes[index].value, node, vm);
-            if (parsedAttribute) {
-                allAttributes.push(parsedAttribute);
+            let bindingProperties = this.bindingEngine.parseBinding(node.attributes[index].name, node.attributes[index].value, node, vm);
+            if (bindingProperties) {
+                allAttributes.push({ key: node.attributes[index].name, value: node.attributes[index].value, bindingProperties });
                 node.removeAttribute(node.attributes[index].name);
             }
         }
-        
+
         /* first INIT all bindings */
         for (let parsedAttribute of allAttributes) {
-            this.bindingEngine.bindInitPhase(parsedAttribute);
+            const context: BindingContext = this.bindingEngine.bindInitPhase(parsedAttribute.bindingProperties);
+            context.originalKey = parsedAttribute.key;
+            context.originalValue = parsedAttribute.value;
         }
 
         /* next UPDATE all bindings and remove attributes */
         for (let parsedAttribute of allAttributes) {
-            this.bindingEngine.bindUpdatePhase(parsedAttribute);
+            this.bindingEngine.bindUpdatePhase(parsedAttribute.bindingProperties);
         }
     }
 
@@ -90,8 +93,8 @@ export class Imagine {
 
         let attribute: string = node.getAttribute('TRANSFORM') || '';
         let parsedAttribute = this.bindingEngine.parseBinding('@transform', attribute, node, vm);
-        
-        if(!parsedAttribute) return;
+
+        if (!parsedAttribute) return;
 
         parsedAttribute.parameter = node.getAttribute('TARGET') || ''; /* only TARGET is implemented.. NAME would be the other option */
 

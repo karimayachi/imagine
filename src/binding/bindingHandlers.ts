@@ -82,6 +82,7 @@ export class EventHandler implements BindingHandler {
     init(element: HTMLElement, value: any, context: BindingContext): void {
         if (typeof value === 'function') {
             (<HTMLInputElement>element).addEventListener(context.parameter!, (event: Event): void => {
+                event.stopPropagation();
                 value(context.vm, event);
             });
         }

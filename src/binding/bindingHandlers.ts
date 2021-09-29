@@ -135,7 +135,7 @@ export class IfHandler implements BindingHandler {
 
         if (value && context.template) {
             let newItem: HTMLElement = <HTMLElement>context.template.cloneNode(true);
-            bind(newItem, context.originalVm);
+            bind(context.originalVm, newItem);
             element.appendChild(newItem);
         }
     }
@@ -158,7 +158,7 @@ export class ContextHandler implements BindingHandler {
 
         if (value !== undefined && value !== null && context.template) {
             let newItem: HTMLElement = <HTMLElement>context.template.cloneNode(true);
-            bind(newItem, value);
+            bind(value, newItem);
             element.appendChild(newItem);
         }
     }
@@ -186,7 +186,7 @@ export class HtmlHandler implements BindingHandler {
             element.appendChild(template.content);
             setTimeout(() => { // Move init to back of callstack, so Custom Element is initialized first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
                 for (let index = 0; index < element.childNodes.length; index++) {
-                    bind(<HTMLElement>element.childNodes[index], context.vm);
+                    bind(context.vm, <HTMLElement>element.childNodes[index]);
                 }
             }, 0);
         }
@@ -197,7 +197,7 @@ export class ContentHandler implements BindingHandler {
     update(element: HTMLElement, value: any, context: BindingContext, change: IArraySplice<any>): void {
         if (value && value.contentTemplate) {
             element.innerHTML = value.contentTemplate;
-            bind(element, value);
+            bind(value, element);
         }
         else {
             element.innerText = '';
@@ -211,50 +211,80 @@ export class ForEachHandler implements BindingHandler {
         let template: DocumentFragment = document.createDocumentFragment();
 
         while (element.childNodes.length > 0) {
-            template.appendChild(element.childNodes[0]);
+            if (element.childNodes[0].nodeType === 3) { /* don't allow toplevel text-node in template. Browsers seem to add text-nodes left and right, so filter them out */
+                element.removeChild(element.childNodes[0]);
+            }
+            else {
+                template.appendChild(element.childNodes[0]);
+            }
         }
+
+        /* set up a index-tracker between array and HTML-elements. Facilitates removing and replacing items and speeding up */
+        context.bindingData = [];
 
         //scopes.set(context.propertyName, context.vm);
         context.template = template;
     }
 
     update(element: HTMLElement & { selecteditems: any[], selecteditem: any }, value: any, context: BindingContext, change: IArraySplice<any> | IArrayChange): void {
-        if (change && change.type === 'splice') {
-            for (let item of change.added) {
-                addItem(item, change.index);
-            }
-
-            for (let item of change.removed) {
-                for (let index = element.childNodes.length - 1; index >= 0; index--) {
-                    if (contexts.has(<HTMLElement>element.childNodes[index]) &&
-                        contexts.get(<HTMLElement>element.childNodes[index])!.has('template')) {
-                        let vm: any = contexts.get(<HTMLElement>element.childNodes[index])!.get('template')!.vm;
-                        if (item === vm) {
-                            element.childNodes[index].remove();
-                        }
-                    }
+        if (change && change.type === 'splice') { /* items are added or removed */
+            /* remove items */
+            if (change.removedCount > 0) {
+                for(let i = 0; i < change.removedCount; i++) {
+                    context.bindingData[change.index].forEach((element: HTMLElement) => { element.remove(); });
                 }
+                
+                (<any[]>context.bindingData).splice(change.index, change.removed.length);
+            }
+            
+            /* add items */
+            for (let i = change.addedCount - 1; i >= 0; i--) {
+                addItem(change.added[i], change.index);
             }
         }
         else if (change && change.type === 'update') {
-            element.innerHTML = ''; /* TODO: does this sufficiently trigger GC? do the bindings disappear from the weakmap AND underlying map? */
+            if (change.object === value) { /* an item IN the array is updated */
+                /* naive approach: don't rebind existing element, but first remove old item and add new at same position */
+                context.bindingData[change.index].forEach((element: HTMLElement) => { element.remove(); });
+                (<any[]>context.bindingData).splice(change.index, 1);
+                addItem(change.newValue, change.index);
+            }
+            else { /* the complete array is swapped out for a new array */
+                element.innerHTML = ''; /* TODO: does this sufficiently trigger GC? do the bindings disappear from the weakmap AND underlying map? */
+                context.bindingData = [];
 
-            for (let item of change.newValue) {
-                addItem(item);
+                for (let item of change.newValue) {
+                    addItem(item);
+                }
             }
         }
-        else {
+        else { /* first fill of array - no change */
             for (let item of value) {
                 addItem(item);
             }
         }
 
-        function addItem(item: any, index?: number) {
+        //console.log('CURRENT STATUS', context.bindingData);
+
+        function addItem(item: any, index?: number): void {
             if (context.template) {
                 let content: DocumentFragment = <DocumentFragment>context.template.cloneNode(true);
-                bind(content, item);
+                bind(item, content);
 
-                /* insert selectedItem functionality */
+                /* Keep reference between index of array element and html element
+                 * use WeakRef on browsers that support it, but normal reference on
+                 * legacy browser. Potential memory leak if html elements are remove from
+                 * outside of Imagine.
+                 * Also other manipulations from outside of Image (swapping, moving)
+                 * could cause problems. Use MutationObserver to react to this?
+                 * 
+                 * Wouldn't it be better (and easier) to use a WeakMap with the actual items
+                 * as index, in stead of a seperate number index?
+                 */
+                const startIndex: number = index || element.children.length;
+                (<any[]>context.bindingData).splice(startIndex, 0, Array.from(content.childNodes)); /* insert at start index */
+
+                /* insert selectedItem and selectedItems functionality */
                 for (let i = 0; i < content.childNodes.length; i++) {
                     let itemElement: HTMLElement = <HTMLElement>content.childNodes[i];
                     if (itemElement.nodeType === 1) {

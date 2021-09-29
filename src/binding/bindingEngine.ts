@@ -287,7 +287,7 @@ export class BindingEngine {
 
                         originalElement.appendChild(nodeToRestore);
                         /* these restored, fresh elements are plain html without any prior bindings, so they must be bound (not re-bound) */
-                        bind(<HTMLElement>nodeToRestore, scope);
+                        bind(scope, <HTMLElement>nodeToRestore);
                     }
 
                     this.rebind(originalName, originalValue, scope, originalElement);

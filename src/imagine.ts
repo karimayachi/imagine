@@ -10,7 +10,7 @@ export class Imagine {
         this.bindingEngine = new BindingEngine();
     }
 
-    bind = (element: HTMLElement | DocumentFragment | null, vm: any, debug?: boolean): void => {
+    bind = (vm: any, element?: HTMLElement | DocumentFragment | null, debug?: boolean): void => {
         if(debug) {
             (<any>window).__debug_imagine = this;
         }

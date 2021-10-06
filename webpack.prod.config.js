@@ -9,7 +9,7 @@ module.exports = [
         use: { 
           loader: 'ts-loader',
           options: {
-            configFile: 'src.tsconfig.json'
+            configFile: 'tsconfig.json'
           }
         },
         exclude: /node_modules/
@@ -19,8 +19,7 @@ module.exports = [
       extensions: ['.tsx', '.ts', '.js']
     },
     output: {
-      path: __dirname + '/dist',
-      publicPath: '/dist/',
+      path: __dirname + '/dist/umd/',
       filename: 'index.js',
       library: 'imagine',
       libraryTarget: 'umd'

@@ -10,7 +10,7 @@ module.exports = [
         use: { 
           loader: 'ts-loader',
           options: {
-            configFile: 'src.tsconfig.json'
+            configFile: 'tsconfig.json'
           }
         },
         exclude: /node_modules/

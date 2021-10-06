@@ -5,8 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build-dev": "webpack --config webpack.dev.config",
-    "build-prod": "webpack --config webpack.prod.config",
-    "demo": "webpack-dev-server --config webpack.demo.config"
+    "build-prod": "webpack --config webpack.prod.config"
   },
   "author": "",
   "license": "ISC",
@@ -14,19 +13,9 @@
     "ts-loader": "^7.0.5",
     "typescript": "^3.9.6",
     "webpack": "^4.43.0",
-    "webpack-cli": "^3.3.12",
-    "webpack-dev-server": "^3.11.0"
+    "webpack-cli": "^3.3.12"
   },
   "dependencies": {
-    "@material/checkbox": "^7.0.0",
-    "@material/mwc-button": "^0.17.2",
-    "@material/mwc-fab": "^0.17.2",
-    "@material/mwc-formfield": "^0.17.2",
-    "@material/mwc-icon-button": "^0.17.2",
-    "@material/mwc-list": "^0.17.2",
-    "@material/mwc-select": "^0.17.2",
-    "@material/mwc-slider": "^0.17.2",
-    "@material/mwc-textfield": "^0.17.2",
     "mobx": "^5.15.4"
   }
 }

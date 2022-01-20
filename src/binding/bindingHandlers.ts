@@ -327,7 +327,13 @@ export class ForEachHandler implements BindingHandler {
              * Wouldn't it be better (and easier) to use a WeakMap with the actual items
              * as index, in stead of a seperate number index?
              */
-            const elementsToAdd: ChildNode[] = Array.from(content.childNodes); /* .childNodes seems to be a bit faster than .children (Chrome 94) (and we already remove non-elements from the template anyway, so childNodes is safe) */
+            let elementsToAdd: ChildNode[];
+            if(content instanceof DocumentFragment) {
+                elementsToAdd = Array.from(content.childNodes); /* .childNodes seems to be a bit faster than .children (Chrome 94) (and we already remove non-elements from the template anyway, so childNodes is safe) */
+            }
+            else {
+                elementsToAdd = [content];
+            }
 
             if (index !== undefined) { /* splice is very expensive, so only use if absolutely necessary. Otherwise just push */
                 (<any[]>context.bindingData).splice(index, 0, elementsToAdd); /* insert at start index */
@@ -337,12 +343,28 @@ export class ForEachHandler implements BindingHandler {
                 (<any[]>context.bindingData).push(elementsToAdd);
                 element.appendChild(content);
             }
+            
+            /* find web-components in added nodes */
+            let webcomponents: ChildNode[] = [];
+            for(let el of (<HTMLElement[]>elementsToAdd)) {
+                if('tagName' in el && el.tagName.includes('-')) {
+                    webcomponents.push(el);
+                }
+                for(let child of (<HTMLElement>el).querySelectorAll('*')) {
+                    if('tagName' in child && child.tagName.includes('-')) {
+                        webcomponents.push(child);
+                    }
+                }
+            }
 
-            const webcomponents = elementsToAdd.filter((item: HTMLElement | Node) => 'tagName' in item && item.tagName.includes('-'));
             return { webcomponents: webcomponents.length > 0 ? webcomponents : null };
         }
 
         function hookUpSelectedItems(webcomponents: { webcomponents: ChildNode[] | null, item: any }[]) {
+            if(!('selecteditem' in element || 'selecteditems' in element)) {
+                return;
+            }
+
             if ('selecteditems' in element && element.selecteditems === undefined) {
                 (<IObservableArray>element.selecteditems) = observable.array([]);
             }
@@ -355,9 +377,7 @@ export class ForEachHandler implements BindingHandler {
                 for (let i = 0; i < webcomponent.webcomponents.length; i++) {
                     const itemElement: HTMLElement = <HTMLElement>webcomponent.webcomponents[i];
 
-                    if (('selected' in itemElement || 'checked' in itemElement) &&
-                        ('selecteditem' in element || 'selecteditems' in element)) {
-
+                    if (('selected' in itemElement || 'checked' in itemElement)) {
                         const selectedOrChecked: string = 'selected' in itemElement ? 'selected' : 'checked';
 
                         const vm = {
@@ -453,6 +473,8 @@ export class ForEachHandler implements BindingHandler {
                         };
                         bindingEngine.bindInitPhase(bindingProperties);
                         bindingEngine.bindUpdatePhase(bindingProperties);
+
+                        break; // Stop at first element that implements selected or checked
                     }
                 }
             }

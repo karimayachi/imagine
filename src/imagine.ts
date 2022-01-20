@@ -1,6 +1,7 @@
 import { BindingEngine, BindingProperties } from './binding/bindingEngine';
 import { BindingContext } from './binding/bindingContext';
-import { scopes } from './index';
+import { bind, scopes } from './index';
+import { isComputed } from 'mobx';
 
 export const PROPERTY_SETTER_SYMBOL: unique symbol = Symbol();
 
@@ -182,6 +183,8 @@ export class Imagine {
              *    In this case the original pre-processed binding was a dependency tree looking
              *    at the author of the first comment. We need to evaluate recursiveResolveScopeAndCreateDependencyTree
              *    again. And losing all performance advantages we had by pre-processing the binding.
+             * 4. The BindingValue is a Computed (when using logic (e.g. ternary, conditional or concatenation) in a binding)
+             *    E.g. @if="author.id == 1"
              */
 
             let newBindingValue, newVM, newScope;
@@ -190,7 +193,7 @@ export class Imagine {
                 newVM = vm;
                 newScope = vm;
             }
-            else {
+            else if (!isComputed(cachedBinding.bindingProperties.bindingValue)) {
                 let namedScope = false;
                 for (let [_key, value] of scopes) {
                     if (value === cachedBinding.bindingProperties.scope) {
@@ -207,6 +210,9 @@ export class Imagine {
                 else {
                     throw new Error('Using a dependency tree in a template (if, foreach, content, etc) is not (yet) supported');
                 }
+            }
+            else {
+                throw new Error('Using logic (ternary, conditional or concatenation) in a template (if, foreach, content, etc) is not (yet) supported');
             }
 
             const bindingProperties: BindingProperties = {
@@ -253,11 +259,13 @@ export class Imagine {
                 node.removeAttribute(attributeName);
             }
 
-            if (bindingProperties) { //not null (not able to parse) ánd not undefined (not an Imagine attribute)
-                allAttributes.push({ key: attributeName, value: attributeValue, bindingProperties });
-                if (templateNode && cachedBindings) {
-                    (<HTMLElement>templateNode).removeAttribute(attributeName);
-                    cachedBindings.push({ elementId, bindingProperties });
+            if (bindingProperties) { //not null (not able to parse) AND not undefined (not an Imagine attribute)
+                for (const properties of bindingProperties) { // bindingProperties can contain 2 bindings (in case of transform.. fix later--see comment on transform parsing)
+                    allAttributes.push({ key: attributeName, value: attributeValue, bindingProperties: properties });
+                    if (templateNode && cachedBindings) {
+                        (<HTMLElement>templateNode).removeAttribute(attributeName);
+                        cachedBindings.push({ elementId, bindingProperties: properties });
+                    }
                 }
             }
         }
@@ -294,45 +302,46 @@ export class Imagine {
         /* only transform directive so far, so assume that */
 
         let attribute: string = node.getAttribute('TRANSFORM') || '';
-        let parsedAttribute = this.bindingEngine.parseBinding('@transform', attribute, node, vm);
+        let parsedAttribute: BindingProperties[] | null | undefined = this.bindingEngine.parseBinding('@transform', attribute, node, vm);
 
         if (!parsedAttribute) return;
 
-        parsedAttribute.parameter = node.getAttribute('TARGET') || ''; /* only TARGET is implemented.. NAME would be the other option */
-
-        this.bindingEngine.bindInitPhase(parsedAttribute);
-    }
-
-    private bindInlinedText(node: HTMLElement, vm: any): Node[] | undefined {
-        let templateLiteralRegEx: RegExp = /\${[a-zA-Z.()\s?:']*}/gm;
-        if (templateLiteralRegEx.test(node.textContent!)) {
-            let stringParts: string[] = node.textContent!.split(templateLiteralRegEx);
-            let matches: RegExpMatchArray | null = node.textContent!.match(templateLiteralRegEx);
-            let newNodeList: Node[] = [];
-
-            for (let i = 0; i < stringParts.length; i++) {
-                if (stringParts[i].length > 0) {
-                    newNodeList.push(document.createTextNode(stringParts[i]));
-                }
-
-                let boundElement: HTMLSpanElement = document.createElement('span');
-                if (matches![i]) {
-                    let parsedNode = this.bindingEngine.parseBinding('@text', matches![i].substring(2, matches![i].length - 1), boundElement, vm);
-                    if (parsedNode) {
-                        parsedNode.element = boundElement;
-                        this.bindingEngine.bindInitPhase(parsedNode);
-                        this.bindingEngine.bindUpdatePhase(parsedNode);
-                    }
-
-                    newNodeList.push(boundElement); // even if not bound keep it as a span in DOM. maybe the dependency tree will bind it later
-                }
-            }
-
-            node.replaceWith(...newNodeList);
-
-            return newNodeList;
+        for (const bindingProperties of parsedAttribute) { // bindingProperties can contain 2 bindings (in case of transform.. fix later--see comment on transform parsing)
+            bindingProperties.parameter = node.getAttribute('TARGET') || ''; /* only TARGET is implemented.. NAME would be the other option */
+            this.bindingEngine.bindInitPhase(bindingProperties);
         }
     }
+
+    // private bindInlinedText(node: HTMLElement, vm: any): Node[] | undefined {
+    //     let templateLiteralRegEx: RegExp = /\${[a-zA-Z.()\s?:']*}/gm;
+    //     if (templateLiteralRegEx.test(node.textContent!)) {
+    //         let stringParts: string[] = node.textContent!.split(templateLiteralRegEx);
+    //         let matches: RegExpMatchArray | null = node.textContent!.match(templateLiteralRegEx);
+    //         let newNodeList: Node[] = [];
+
+    //         for (let i = 0; i < stringParts.length; i++) {
+    //             if (stringParts[i].length > 0) {
+    //                 newNodeList.push(document.createTextNode(stringParts[i]));
+    //             }
+
+    //             let boundElement: HTMLSpanElement = document.createElement('span');
+    //             if (matches![i]) {
+    //                 let parsedNode = this.bindingEngine.parseBinding('@text', matches![i].substring(2, matches![i].length - 1), boundElement, vm);
+    //                 if (parsedNode) {
+    //                     parsedNode.element = boundElement;
+    //                     this.bindingEngine.bindInitPhase(parsedNode);
+    //                     this.bindingEngine.bindUpdatePhase(parsedNode);
+    //                 }
+
+    //                 newNodeList.push(boundElement); // even if not bound keep it as a span in DOM. maybe the dependency tree will bind it later
+    //             }
+    //         }
+
+    //         node.replaceWith(...newNodeList);
+
+    //         return newNodeList;
+    //     }
+    // }
 
     private convertInlineBindings(node: HTMLElement): void {
         let templateLiteralRegEx: RegExp = /\${[a-zA-Z.()\s?:']*}/gm;

@@ -18,7 +18,7 @@ export class BindingEngine {
         this.scopes = new Map<string, any>();
     }
 
-    parseBinding = (key: string, value: string, node: HTMLElement, vm: any): BindingProperties | null | undefined => {
+    parseBinding = (key: string, value: string, node: HTMLElement, vm: any): BindingProperties[] | null | undefined => {
         let name: string;
         let parsedValue: string;
         let operator: string = key[0];
@@ -67,7 +67,7 @@ export class BindingEngine {
                  * parse the value, we must return null in stead. This means: it is an Imagine attribute, but we couldn't
                  * resolve it. Maybe later it will succeed to parse.
                  */
-                return undefined; 
+                return undefined;
         }
 
         /* Parse the passed value. THIS IS BY NO MEANS A COMPLETE PARSER, IT ONLY HANDLES SOME STRAIGHTFORWARD CASES AS A PROOF OF CONCEPT!
@@ -161,31 +161,39 @@ export class BindingEngine {
             }
         }
         else if (parsedValue.match(transformRegEx)) { // transform binding
+            /* It would probably be better to pre-parse the transform and create a Computed
+             * just like the other logic-bindings.. But for the time being register it as
+             * a seperate binding that is evaluated at run-time to keep the option to
+             * register global transforms
+             */
             let parts: RegExpExecArray = transformRegEx.exec(parsedValue)!;
             let transform: string = parts[1];
             let binding: string = parts[2];
 
-            /* register the transform */
-            let parsedAttribute = this.parseBinding('@transform', transform, node, vm);
+            /* parse the transform */
+            let parsedTransformAttribute = this.parseBinding('@transform', transform, node, vm);
 
-            if (!parsedAttribute || typeof parsedAttribute.bindingValue === 'string') { // also check for string binding (this comes from line 107 -- special SCOPE handling).. very ugly, should be replaced
+            if (!parsedTransformAttribute || typeof parsedTransformAttribute[0].bindingValue === 'string') { // also check for string binding (this comes from line 107 -- special SCOPE handling).. very ugly, should be replaced
                 console.warn(`[Imagine] couldn\'t find transform \'${transform}\'`);
+                parsedTransformAttribute = [];
             }
             else {
                 /* if the handler starts with __ it's a handler that requires extra info. e.g. __attribute or __property
                  * so register the transform to the complete path (e.g. attribute.style or property.maxCharacters)
                  * if it is a regular handler, just register the transform to the handler. (e.g. text or value)
                  */
-                parsedAttribute.parameter = bindingProperties.handler.startsWith('__')
+                parsedTransformAttribute[0].parameter = bindingProperties.handler.startsWith('__')
                     ? bindingProperties.handler.substr(2) + '.' + name
                     : name;
-
-                this.bindInitPhase(parsedAttribute);
             }
 
-            /* register the regular binding */
-            let parsedAttributeForBinding = this.parseBinding(key, binding, node, vm);
-            return parsedAttributeForBinding;
+            /* parse the regular binding */
+            let parsedBindingAttribute = this.parseBinding(key, binding, node, vm);
+            if (parsedBindingAttribute) { // if it failed parsing, maybe it will be picked up later by the Dependency Tree
+                parsedTransformAttribute = parsedTransformAttribute?.concat(parsedBindingAttribute);
+            }
+            
+            return parsedTransformAttribute;
         }
         else if (parsedValue[0] == '!') { // simplified negation
             let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parsedValue.substr(1), operator + name, parsedValue, node) || {};
@@ -248,21 +256,26 @@ export class BindingEngine {
             bindingProperties.scope = vm;
         }
 
-        return bindingProperties;
+        return [bindingProperties];
     }
 
-    getBindingValueFromProperty(propertyName: string, viewmodel: any) {
-        if (isObservableArray(viewmodel[propertyName])) { // value is an observable array property
-            return viewmodel[propertyName];
+    getBindingValueFromProperty(propertyName: string, viewmodel: any): any {
+        if (propertyName === 'this') {
+            return viewmodel;
         }
-        if (isObservableProp(viewmodel, propertyName)) { // value is an observable property
-            return getAtom(viewmodel, propertyName);
-        }
-        else if (typeof viewmodel[propertyName] === 'function') { // value is a method on scope
-            return viewmodel[propertyName];
-        }
-        else { // non-observable property on scope
-            return viewmodel[propertyName];
+        else if (viewmodel instanceof Object && propertyName in viewmodel) { // viewmodel is an object / viewmodel and value is a property on object / viewmodel
+            if (isObservableArray(viewmodel[propertyName])) { // value is an observable array property
+                return viewmodel[propertyName];
+            }
+            if (isObservableProp(viewmodel, propertyName)) { // value is an observable property
+                return getAtom(viewmodel, propertyName);
+            }
+            else if (typeof viewmodel[propertyName] === 'function') { // value is a method on scope
+                return viewmodel[propertyName];
+            }
+            else { // non-observable property on scope
+                return viewmodel[propertyName];
+            }
         }
     }
 
@@ -283,7 +296,7 @@ export class BindingEngine {
 
             for (let treeNode of dependencyTree) {
                 let disposer: Lambda = observe(treeNode.vm, treeNode.property, (change): void => {
-                    // console.log('DEPENDENCY TREE TRIGGERED FOR', treeNode, originalName);
+                    //console.log('DEPENDENCY TREE TRIGGERED FOR', treeNode, originalName);
                     /* somewhere in the observed path a node is changed
                      * dispose of all listeners and (try to) rebind the whole path to it's original binding
                      */
@@ -402,35 +415,37 @@ export class BindingEngine {
      * @returns true if child nodes were updated during rebind, false otherwise
      */
     private rebind(originalName: string, originalValue: string, originalVM: any, originalElement: HTMLElement): boolean {
-        let newBindingProperties = this.parseBinding(originalName, originalValue, originalElement, originalVM);
+        let newBindingProperties: BindingProperties[] | null | undefined = this.parseBinding(originalName, originalValue, originalElement, originalVM);
         let oldBindingContextTemplate: any;
         let bindingControlsChildren: boolean = false;
 
         if (newBindingProperties) {
-            /* clean up existing context */
-            if (this.boundElements.has(originalElement)) {
-                let contextsForElement: Map<string, BindingContext> = this.boundElements.get(originalElement)!;
-                let contextIdentifier: string = `${newBindingProperties.handler}${newBindingProperties.parameter ? ':' + newBindingProperties.parameter : ''}`;
+            for (const bindingProperties of newBindingProperties) { // bindingProperties can contain 2 bindings (in case of transform.. fix later--see comment on transform parsing)
+                /* clean up existing context */
+                if (this.boundElements.has(originalElement)) {
+                    let contextsForElement: Map<string, BindingContext> = this.boundElements.get(originalElement)!;
+                    let contextIdentifier: string = `${bindingProperties.handler}${bindingProperties.parameter ? ':' + bindingProperties.parameter : ''}`;
 
-                if (contextsForElement.has(contextIdentifier)) {
-                    oldBindingContextTemplate = contextsForElement.get(contextIdentifier)?.template; // Save a template if there was one... For 'if' and 'foreach' bindings that loose their template otherwise...
-                    contextsForElement.delete(contextIdentifier);
+                    if (contextsForElement.has(contextIdentifier)) {
+                        oldBindingContextTemplate = contextsForElement.get(contextIdentifier)?.template; // Save a template if there was one... For 'if' and 'foreach' bindings that loose their template otherwise...
+                        contextsForElement.delete(contextIdentifier);
+                    }
                 }
+
+                /* rebind init phase */
+                const newContext: BindingContext = this.bindInitPhase(bindingProperties, true);
+                newContext.originalKey = originalName;
+                newContext.originalValue = originalValue;
+                bindingControlsChildren = bindingControlsChildren || newContext.controlsChildren; // in case EITHER of the bindings (in case of transform) controls it's children
+
+                /* restore template if there was one before */
+                if (oldBindingContextTemplate !== undefined) {
+                    newContext.template = oldBindingContextTemplate;
+                }
+
+                /* rebind update phase */
+                this.bindUpdatePhase(bindingProperties);
             }
-
-            /* rebind init phase */
-            const newContext: BindingContext = this.bindInitPhase(newBindingProperties, true);
-            newContext.originalKey = originalName;
-            newContext.originalValue = originalValue;
-            bindingControlsChildren = newContext.controlsChildren;
-
-            /* restore template if there was one before */
-            if (oldBindingContextTemplate !== undefined) {
-                newContext.template = oldBindingContextTemplate;
-            }
-
-            /* rebind update phase */
-            this.bindUpdatePhase(newBindingProperties);
         }
 
         return bindingControlsChildren;
@@ -547,12 +562,12 @@ export class BindingEngine {
             if (isObservableArray(bindingProperties.bindingValue)) { /* not only observe the array contents, but also replacing the array */
                 observe(context.vm, bindingProperties.propertyName, (change: IValueDidChange<any>): void => {
                     bindingProperties.bindingValue = change.newValue;
-                    observe(bindingProperties.bindingValue, (c) => { updateFunction('from array '+bindingProperties.propertyName,c)}); /* observe the content of the new array */
-                    updateFunction('array swapped',change);
+                    observe(bindingProperties.bindingValue, (c) => { updateFunction('from array ' + bindingProperties.propertyName, c) }); /* observe the content of the new array */
+                    updateFunction('array swapped', change);
                 });
             }
 
-            observe(bindingProperties.bindingValue, (c) => { updateFunction('from value of '+bindingProperties.propertyName,c)}); /* primitives, objects and content of arrays */
+            observe(bindingProperties.bindingValue, (c) => { updateFunction('from value of ' + bindingProperties.propertyName, c) }); /* primitives, objects and content of arrays */
         }
 
         updateFunction('immediate');

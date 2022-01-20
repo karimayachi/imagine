@@ -1,4 +1,5 @@
 import typescript from '@rollup/plugin-typescript';
+import resolve from '@rollup/plugin-node-resolve';
 
 /**
  * @type {import('rollup').RollupOptions}
@@ -11,8 +12,8 @@ const config = {
         name: 'imagine',
         sourcemap: true
     },
-    plugins: [typescript({ 'module': 'es6' })],
-    external: 'mobx'
+    plugins: [typescript({ 'module': 'es6' }), resolve()],
+    //external: 'mobx'
 };
 
 export default config;

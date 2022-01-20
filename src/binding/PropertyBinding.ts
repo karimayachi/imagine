@@ -8,9 +8,9 @@ export class PropertyHandler implements BindingHandler {
     init(element: HTMLElement, _value: any, context: BindingContext, updateValue: (value: any) => void): void {
         setTimeout(() => { // Move init to back of callstack, so Custom Element is initialized first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
             let propertyName: string = context.parameter!;
-
+            
             let caseSensitiveDescriptor: { descriptor: PropertyDescriptor, caseSensitiveName: string } | null = getPropertyDescriptorFromPrototypeChain(element, propertyName);
-
+            // console.log('----- INIT PROPERTY', propertyName, context)
             if (caseSensitiveDescriptor) { // configure existing property
                 context.parameter = caseSensitiveDescriptor.caseSensitiveName; // update the context to match the real properyname
 
@@ -44,10 +44,12 @@ export class PropertyHandler implements BindingHandler {
                                 originalSetter.call(element, transform(value));
                             }
                             else {
+                                //console.log('CALL ORIGINAL SETTER', value)
                                 originalSetter.call(element, value);
                             }
                         }
 
+                        //console.log('UPDATE PROP:', !context.preventCircularUpdate)
                         if (!context.preventCircularUpdate) {
                             if (transform && (<{ write: Function }>transform).write) {
                                 updateValue((<{ write: Function }>transform).write(value));
@@ -58,12 +60,14 @@ export class PropertyHandler implements BindingHandler {
                         }
 
                         context.preventCircularUpdate = false;
+                        //console.log('FINISHED')
                     }
                 });
 
                 let newDescriptor: PropertyDescriptor = Object.getOwnPropertyDescriptor(element, caseSensitiveDescriptor.caseSensitiveName)!;
                 (<any>newDescriptor.set)[PROPERTY_SETTER_SYMBOL] = originalSetter;
             }
+            /* TODO: D.R.Y.!!! The code below is largely the same as for the case where we bind an existing property */
             else { // create new property
                 let closureValue: any = observable.box();
                 let newProperties: object = {};

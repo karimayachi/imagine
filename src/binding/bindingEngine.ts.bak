@@ -185,7 +185,13 @@ export class BindingEngine {
 
             /* register the regular binding */
             let parsedAttributeForBinding = this.parseBinding(key, binding, node, vm);
-            return parsedAttributeForBinding;
+            if (!parsedAttributeForBinding) {
+                return null;
+            }
+            this.bindInitPhase(parsedAttributeForBinding);
+            this.bindUpdatePhase(parsedAttributeForBinding);
+
+            return null;
         }
         else if (parsedValue[0] == '!') { // simplified negation
             let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parsedValue.substr(1), operator + name, parsedValue, node) || {};

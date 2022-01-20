@@ -133,6 +133,7 @@ export class IfHandler implements BindingHandler {
             context.template = createTemplate(element);
         }, 0);
 
+        console.log('I CONTROL MY CHILDREN')
         return true; // this binding controls its own children
     }
 
@@ -151,8 +152,7 @@ export class IfHandler implements BindingHandler {
                 bind(context.originalVm, newItem);
                 element.appendChild(newItem);
             }
-        }, 0);
-    }
+        }, 0);    }
 }
 
 export class ContextHandler implements BindingHandler {

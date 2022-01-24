@@ -79,7 +79,7 @@ export class BindingEngine {
          * - string concatenation (<namespace.>propertyName + '<string>' + ...) I.e. 'https://url.com/' + person.personalPage. TODO: better to use template literals
          * - transforms (<namespace.>transform(<namespace.>propertyName)) I.e. stringToDate(article.createdAt)
          */
-        const primitiveRegEx: RegExp = /^[\w.]+$/gm;
+        const primitiveRegEx: RegExp = /^[\w.']+$/gm;
         const ternaryRegEx: RegExp = /^([\w.]+)\s*\?\s*'([\w\s:\-?!+\/#=]+)'\s*:\s*'([\w\s:\-?!+\/#=]+)'\s*$/gm;
         const compStringRegEx: RegExp = /^([\w.]+)\s*(==|!=)\s*'([\w\s:\-?!+\/#=]*)'\s*$/gm;
         const compNumberRegEx: RegExp = /^([\w.]+)\s*(==|!=)\s*([0-9]+)\s*$/gm;
@@ -94,23 +94,10 @@ export class BindingEngine {
             bindingProperties.scope = scope;
 
             if (propertyName !== undefined) {
-                if (propertyName === 'this') {
-                    bindingProperties.bindingValue = scope;
-                }
-                else if (scope instanceof Object) { // scope is an object / viewmodel
-                    if (propertyName in scope) { // value is a property on object / viewmodel
-                        bindingProperties.bindingValue = this.getBindingValueFromProperty(propertyName, scope);
-                    }
-                }
+                bindingProperties.bindingValue = this.getBindingValueFromProperty(propertyName, scope);
             }
-            else { // probably stop, but first check for 1 special case: a string is passed in stead of a property
-                if (parsedValue.indexOf('.') < 0) { // treat as string.. only used for scope-binding.. find a cleaner solution than to mix string syntax with parameter syntax
-                    bindingProperties.bindingValue = parsedValue;
-                    bindingProperties.scope = vm;
-                }
-                else {
-                    return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
-                }
+            else {
+                return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
             }
         }
         else if (parsedValue.match(ternaryRegEx)) { // ternary conditional
@@ -193,7 +180,7 @@ export class BindingEngine {
             if (parsedBindingAttribute) { // if it failed parsing, maybe it will be picked up later by the Dependency Tree
                 parsedTransformAttribute = parsedTransformAttribute?.concat(parsedBindingAttribute);
             }
-            
+
             return parsedTransformAttribute;
         }
         else if (parsedValue[0] == '!') { // simplified negation
@@ -261,7 +248,10 @@ export class BindingEngine {
     }
 
     getBindingValueFromProperty(propertyName: string, viewmodel: any): any {
-        if (propertyName === 'this') {
+        if (/^'\w+'$/gm.test(propertyName)) { // string value ('someText')
+            return propertyName.substring(1, propertyName.length - 1);
+        }
+        else if (propertyName === 'this') {
             return viewmodel;
         }
         else if (viewmodel instanceof Object && propertyName in viewmodel) { // viewmodel is an object / viewmodel and value is a property on object / viewmodel
@@ -337,10 +327,13 @@ export class BindingEngine {
 
         switch (levels.length) {
             case 1: // current level, no namespace
-                if (levels[0] === 'this' || levels[0] in currentScope) {
+                if (/^'\w+'$/gm.test(levels[0]) || // string value ('someText')
+                    levels[0] === 'this' ||
+                    levels[0] in currentScope) {
                     return { propertyName: levels[0], scope: scope };
                 }
-                return null; // wasn't able to parse binding, but don't throw yet: maybe it's a string binding
+
+                throw (`[Imagine] cannot parse property: ${levels[0]}`);
             case 2: // one level of namespacing
                 if (this.scopes.has(levels[0])) {
                     scope = this.scopes.get(levels[0]);

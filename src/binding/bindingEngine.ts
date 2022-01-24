@@ -81,8 +81,8 @@ export class BindingEngine {
          */
         const primitiveRegEx: RegExp = /^[\w.]+$/gm;
         const ternaryRegEx: RegExp = /^([\w.]+)\s*\?\s*'([\w\s:\-?!+\/#=]+)'\s*:\s*'([\w\s:\-?!+\/#=]+)'\s*$/gm;
-        const compStringRegEx: RegExp = /^([\w.]+)\s*==\s*'([\w\s:\-?!+\/#=]+)'\s*$/gm;
-        const compNumberRegEx: RegExp = /^([\w.]+)\s*==\s*([0-9]+)\s*$/gm;
+        const compStringRegEx: RegExp = /^([\w.]+)\s*(==|!=)\s*'([\w\s:\-?!+\/#=]*)'\s*$/gm;
+        const compNumberRegEx: RegExp = /^([\w.]+)\s*(==|!=)\s*([0-9]+)\s*$/gm;
         const transformRegEx: RegExp = /^(\S+)\((\S+)\)$/gm
 
         /* TODO: use dependency injection for the different parsers below?
@@ -145,12 +145,13 @@ export class BindingEngine {
         else if (parsedValue.match(compNumberRegEx) || parsedValue.match(compStringRegEx)) { // comparison conditional
             let parts: RegExpExecArray = parsedValue.match(compStringRegEx) ? compStringRegEx.exec(parsedValue)! : compNumberRegEx.exec(parsedValue)!;
             let conditional: string = parts[1];
-            let condition: string | number = parsedValue.match(compStringRegEx) ? parts[2] : parseInt(parts[2]);
+            let equality: string = parts[2]; // == or !=
+            let condition: string | number = parsedValue.match(compStringRegEx) ? parts[3] : parseInt(parts[3]);
             let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, conditional, operator + name, parsedValue, node) || {};
             if (propertyName === undefined) return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
 
             if (propertyName in scope) {
-                let bindingValue: IComputedValue<boolean> = computed((): boolean => scope[<string>propertyName] === condition);
+                let bindingValue: IComputedValue<boolean> = computed((): boolean => equality === '==' ? scope[<string>propertyName] === condition : scope[<string>propertyName] !== condition);
 
                 bindingProperties.propertyName = propertyName;
                 bindingProperties.bindingValue = bindingValue;
@@ -440,7 +441,9 @@ export class BindingEngine {
 
                 /* restore template if there was one before */
                 if (oldBindingContextTemplate !== undefined) {
-                    newContext.template = oldBindingContextTemplate;
+                    setTimeout(() => { // schedule after init, but before update. Both need to have time-outs set
+                        newContext.template = oldBindingContextTemplate;
+                    }, 0);
                 }
 
                 /* rebind update phase */

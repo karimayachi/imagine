@@ -1,8 +1,8 @@
-import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue, IObjectDidChange, Lambda, toJS } from 'mobx';
-import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler, VisibleHandler, ScopeHandler, IfHandler, TransformHandler, ContentHandler, ComponentHandler } from './bindingHandlers';
+import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue, IObjectDidChange, Lambda, toJS, isComputed } from 'mobx';
+import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler, VisibleHandler, ScopeHandler, IfHandler, ContentHandler, ComponentHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { PropertyHandler } from './propertyBinding';
-import { bind, contexts } from '../index';
+import { bind, contexts, scopes } from '../index';
 
 interface BindingHandlers {
     [key: string]: BindingHandler
@@ -18,7 +18,7 @@ export class BindingEngine {
         this.scopes = new Map<string, any>();
     }
 
-    parseBinding = (key: string, value: string, node: HTMLElement, vm: any): BindingProperties[] | null | undefined => {
+    parseBinding = (key: string, value: string, node: HTMLElement, vm: any): BindingProperties | null | undefined => {
         let name: string;
         let parsedValue: string;
         let operator: string = key[0];
@@ -38,7 +38,7 @@ export class BindingEngine {
             parsedValue = value;
         }
 
-        let bindingProperties: BindingProperties = { handler: '', parameter: '', propertyName: parsedValue, vm: vm, scope: null, bindingValue: null, element: node };
+        let bindingProperties: BindingProperties = { handler: '', parameter: '', propertyName: parsedValue, vm: vm, scope: null, bindingValue: null, element: node, isCacheable: false };
 
         switch (operator) {
             case '@':
@@ -92,6 +92,8 @@ export class BindingEngine {
             let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parsedValue, operator + name, parsedValue, node) || {};
             bindingProperties.propertyName = propertyName || bindingProperties.propertyName;
             bindingProperties.scope = scope;
+
+            bindingProperties.isCacheable = true; // FOR NOW ONLY PRIMITIVE BINDINGS ARE CACHEABLE
 
             if (propertyName !== undefined) {
                 bindingProperties.bindingValue = this.getBindingValueFromProperty(propertyName, scope);
@@ -149,39 +151,36 @@ export class BindingEngine {
             }
         }
         else if (parsedValue.match(transformRegEx)) { // transform binding
-            /* It would probably be better to pre-parse the transform and create a Computed
-             * just like the other logic-bindings.. But for the time being register it as
-             * a seperate binding that is evaluated at run-time to keep the option to
-             * register global transforms
-             */
-            let parts: RegExpExecArray = transformRegEx.exec(parsedValue)!;
-            let transform: string = parts[1];
-            let binding: string = parts[2];
+            const parts: RegExpExecArray = transformRegEx.exec(parsedValue)!;
+            const transformPart: string = parts[1];
+            const bindingPart: string = parts[2];
+            let transformFunction: Function | undefined;
+            let binding: any;
 
             /* parse the transform */
-            let parsedTransformAttribute = this.parseBinding('@transform', transform, node, vm);
-
-            if (!parsedTransformAttribute || typeof parsedTransformAttribute[0].bindingValue === 'string') { // also check for string binding (this comes from line 107 -- special SCOPE handling).. very ugly, should be replaced
-                console.warn(`[Imagine] couldn\'t find transform \'${transform}\'`);
-                parsedTransformAttribute = [];
+            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, transformPart, operator + name, parsedValue, node) || {};
+            if (propertyName !== undefined) {
+                transformFunction = this.getBindingValueFromProperty(propertyName, scope);
             }
-            else {
-                /* if the handler starts with __ it's a handler that requires extra info. e.g. __attribute or __property
-                 * so register the transform to the complete path (e.g. attribute.style or property.maxCharacters)
-                 * if it is a regular handler, just register the transform to the handler. (e.g. text or value)
-                 */
-                parsedTransformAttribute[0].parameter = bindingProperties.handler.startsWith('__')
-                    ? bindingProperties.handler.substr(2) + '.' + name
-                    : name;
+
+            if (typeof transformFunction !== 'function') {
+                throw new Error(`[Imagine] couldn\'t find transform \'${transformPart}\'`);
             }
 
             /* parse the regular binding */
-            let parsedBindingAttribute = this.parseBinding(key, binding, node, vm);
-            if (parsedBindingAttribute) { // if it failed parsing, maybe it will be picked up later by the Dependency Tree
-                parsedTransformAttribute = parsedTransformAttribute?.concat(parsedBindingAttribute);
+            ({ propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, bindingPart, operator + name, parsedValue, node) || {});
+            if (propertyName !== undefined) {
+                binding = this.getBindingValueFromProperty(propertyName, scope);
+            }
+            else {
+                return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
             }
 
-            return parsedTransformAttribute;
+            /* construct the transformed binding */
+            const bindingValue: IComputedValue<boolean> = computed((): any => transformFunction!(binding));
+            bindingProperties.propertyName = propertyName;
+            bindingProperties.bindingValue = bindingValue;
+            bindingProperties.scope = scope;
         }
         else if (parsedValue[0] == '!') { // simplified negation
             let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parsedValue.substr(1), operator + name, parsedValue, node) || {};
@@ -244,7 +243,7 @@ export class BindingEngine {
             bindingProperties.scope = vm;
         }
 
-        return [bindingProperties];
+        return bindingProperties;
     }
 
     getBindingValueFromProperty(propertyName: string, viewmodel: any): any {
@@ -276,8 +275,8 @@ export class BindingEngine {
 
         /* build the dependency tree */
         if (dependencyTree.length > 0) {
-            let disposers: Lambda[] = []; /* will the array of disposers be disposed itself? */
-            let storedChildElements: DocumentFragment = document.createDocumentFragment();  /* remove and store all child elements if the binding failed. If retrying, we add them back in, but for now just assume this whole tree to be corrupted */
+            const disposers: Lambda[] = []; /* will the array of disposers be disposed itself? */
+            const storedChildElements: DocumentFragment = document.createDocumentFragment();  /* remove and store all child elements if the binding failed. If retrying, we add them back in, but for now just assume this whole tree to be corrupted */
 
             if (finalScope == null && originalElement.childNodes.length > 0) { /* binding failed. save and remove the childelements */
                 while (originalElement.childNodes.length > 0) {
@@ -286,7 +285,7 @@ export class BindingEngine {
             }
 
             for (let treeNode of dependencyTree) {
-                let disposer: Lambda = observe(treeNode.vm, treeNode.property, (change): void => {
+                const disposer: Lambda = observe(treeNode.vm, treeNode.property, (change): void => {
                     //console.log('DEPENDENCY TREE TRIGGERED FOR', treeNode, originalName);
                     /* somewhere in the observed path a node is changed
                      * dispose of all listeners and (try to) rebind the whole path to it's original binding
@@ -409,39 +408,37 @@ export class BindingEngine {
      * @returns true if child nodes were updated during rebind, false otherwise
      */
     private rebind(originalName: string, originalValue: string, originalVM: any, originalElement: HTMLElement): boolean {
-        let newBindingProperties: BindingProperties[] | null | undefined = this.parseBinding(originalName, originalValue, originalElement, originalVM);
+        let newBindingProperties: BindingProperties | null | undefined = this.parseBinding(originalName, originalValue, originalElement, originalVM);
         let oldBindingContextTemplate: any;
         let bindingControlsChildren: boolean = false;
 
         if (newBindingProperties) {
-            for (const bindingProperties of newBindingProperties) { // bindingProperties can contain 2 bindings (in case of transform.. fix later--see comment on transform parsing)
-                /* clean up existing context */
-                if (this.boundElements.has(originalElement)) {
-                    let contextsForElement: Map<string, BindingContext> = this.boundElements.get(originalElement)!;
-                    let contextIdentifier: string = `${bindingProperties.handler}${bindingProperties.parameter ? ':' + bindingProperties.parameter : ''}`;
+            /* clean up existing context */
+            if (this.boundElements.has(originalElement)) {
+                let contextsForElement: Map<string, BindingContext> = this.boundElements.get(originalElement)!;
+                let contextIdentifier: string = `${newBindingProperties.handler}${newBindingProperties.parameter ? ':' + newBindingProperties.parameter : ''}`;
 
-                    if (contextsForElement.has(contextIdentifier)) {
-                        oldBindingContextTemplate = contextsForElement.get(contextIdentifier)?.template; // Save a template if there was one... For 'if' and 'foreach' bindings that loose their template otherwise...
-                        contextsForElement.delete(contextIdentifier);
-                    }
+                if (contextsForElement.has(contextIdentifier)) {
+                    oldBindingContextTemplate = contextsForElement.get(contextIdentifier)?.template; // Save a template if there was one... For 'if' and 'foreach' bindings that loose their template otherwise...
+                    contextsForElement.delete(contextIdentifier);
                 }
-
-                /* rebind init phase */
-                const newContext: BindingContext = this.bindInitPhase(bindingProperties, true);
-                newContext.originalKey = originalName;
-                newContext.originalValue = originalValue;
-                bindingControlsChildren = bindingControlsChildren || newContext.controlsChildren; // in case EITHER of the bindings (in case of transform) controls it's children
-
-                /* restore template if there was one before */
-                if (oldBindingContextTemplate !== undefined) {
-                    setTimeout(() => { // schedule after init, but before update. Both need to have time-outs set
-                        newContext.template = oldBindingContextTemplate;
-                    }, 0);
-                }
-
-                /* rebind update phase */
-                this.bindUpdatePhase(bindingProperties);
             }
+
+            /* rebind init phase */
+            const newContext: BindingContext = this.bindInitPhase(newBindingProperties, true);
+            newContext.originalKey = originalName;
+            newContext.originalValue = originalValue;
+            bindingControlsChildren = bindingControlsChildren || newContext.controlsChildren; // in case EITHER of the bindings (in case of transform) controls it's children
+
+            /* restore template if there was one before */
+            if (oldBindingContextTemplate !== undefined) {
+                setTimeout(() => { // schedule after init, but before update. Both need to have time-outs set
+                    newContext.template = oldBindingContextTemplate;
+                }, 0);
+            }
+
+            /* rebind update phase */
+            this.bindUpdatePhase(newBindingProperties);
         }
 
         return bindingControlsChildren;
@@ -610,7 +607,8 @@ export interface BindingProperties {
     scope: any,
     vm: any,
     bindingValue: any,
-    element: HTMLElement
+    element: HTMLElement,
+    isCacheable: boolean
 }
 
 
@@ -625,7 +623,7 @@ BindingEngine.handlers['visible'] = new VisibleHandler();
 BindingEngine.handlers['content'] = new ContentHandler();
 BindingEngine.handlers['component'] = new ComponentHandler();
 
-BindingEngine.handlers['transform'] = new TransformHandler();
+// BindingEngine.handlers['transform'] = new TransformHandler();
 
 BindingEngine.handlers['__attribute'] = new AttributeHandler();
 BindingEngine.handlers['__property'] = new PropertyHandler();

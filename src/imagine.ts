@@ -87,7 +87,7 @@ export class Imagine {
         //console.log(content, vm, context)
 
         if (!context.cachedBindings) {
-            context.cachedBindings = [];
+            context.cachedBindings = {};
         }
 
         this.recursiveBindNodesTemplate(content, vm, context.template, context.cachedBindings);
@@ -99,7 +99,7 @@ export class Imagine {
      * A variant of recursiveBindNodes that is used in recursiveBindAndCache
      * and build the content and binding-cache at the same time
      */
-    private recursiveBindNodesTemplate(rootNode: Node, vm: any, templateNode: Node, cachedBindings: { elementId: string, bindingProperties: BindingProperties }[]) {
+    private recursiveBindNodesTemplate(rootNode: Node, vm: any, templateNode: Node, cachedBindings: { [key: string]: BindingProperties[] }) {
         let someBindingControlsChildren: boolean = false;
         let copyBeforeBinding: NodeList = rootNode.cloneNode(true).childNodes;
 
@@ -166,72 +166,33 @@ export class Imagine {
 
         const content: HTMLElement = <HTMLElement>context.template!.cloneNode(true);
 
-        for (let cachedBinding of context.cachedBindings) {
-            const id: string = cachedBinding.elementId;
-            const element: HTMLElement = content.dataset['bindingId'] === id ? content : <HTMLElement>content.querySelector(`[data-binding-id="${id}"]`);
+        for (let elementId of Object.keys(context.cachedBindings)) {
+            const element: HTMLElement = content.dataset['bindingId'] === elementId ? content : <HTMLElement>content.querySelector(`[data-binding-id="${elementId}"]`);
+            element.removeAttribute('data-binding-id');
+            const cachedBindingsForElement: BindingProperties[] = context.cachedBindings[elementId];
 
-            /* When retrieving preprocessed bindingproperties from cache, there can be three
-             * situations:
-             * 1. The VM and SCOPE are the same.. This goes for simple property bindings (e.g.) ${title}
-             *    in a @foreach="comments". title is a property on the first comment. 
-             *    So we need to swap out the original VM and SCOPE with the VM of newly added item
-             * 2. The VM and SCOPE are not the same, but SCOPE is independent of the newly added item
-             *    e.g. @if="globalScope.user.loggedIn"
-             *    In this case, we can just leave the SCOPE and BINDINGVALUE (and dependency tree?) in tact. 
-             * 3. The VM and SCOPE are not the same and SCOPE is dependent on the newly added item
-             *    e.g. ${author.name} in a @foreach="comments"
-             *    In this case the original pre-processed binding was a dependency tree looking
-             *    at the author of the first comment. We need to evaluate recursiveResolveScopeAndCreateDependencyTree
-             *    again. And losing all performance advantages we had by pre-processing the binding.
-             * 4. The BindingValue is a Computed (when using logic (e.g. ternary, conditional or concatenation) in a binding)
-             *    E.g. @if="author.id == 1"
-             */
+            if (cachedBindingsForElement.length > 0) {
+                for (let cachedBinding of cachedBindingsForElement) {
+                    const newBindingValue = this.bindingEngine.getBindingValueFromProperty(cachedBinding.propertyName, vm);
 
-            let newBindingValue, newVM, newScope;
-            if (cachedBinding.bindingProperties.scope === cachedBinding.bindingProperties.vm) {
-                newBindingValue = this.bindingEngine.getBindingValueFromProperty(cachedBinding.bindingProperties.propertyName, vm);
-                newVM = vm;
-                newScope = vm;
-            }
-            else if (!isComputed(cachedBinding.bindingProperties.bindingValue)) {
-                let namedScope = false;
-                for (let [_key, value] of scopes) {
-                    if (value === cachedBinding.bindingProperties.scope) {
-                        namedScope = true;
-                        break;
-                    }
-                }
+                    const bindingProperties: BindingProperties = {
+                        handler: cachedBinding.handler,
+                        parameter: cachedBinding.parameter,
+                        propertyName: cachedBinding.propertyName,
+                        isCacheable: cachedBinding.isCacheable,
+                        scope: vm,
+                        vm: vm,
+                        bindingValue: newBindingValue,
+                        element: element
+                    };
 
-                if (namedScope) {
-                    newBindingValue = cachedBinding.bindingProperties.bindingValue;
-                    newVM = vm;
-                    newScope = cachedBinding.bindingProperties.scope;
-                }
-                else {
-                    throw new Error('Using a dependency tree in a template (if, foreach, content, etc) is not (yet) supported');
+                    this.bindingEngine.bindInitPhase(bindingProperties);
+                    this.bindingEngine.bindUpdatePhase(bindingProperties);
                 }
             }
             else {
-                throw new Error('Using logic (ternary, conditional or concatenation) in a template (if, foreach, content, etc) is not (yet) supported');
+                bind(vm, element);
             }
-
-            const bindingProperties: BindingProperties = {
-                handler: cachedBinding.bindingProperties.handler,
-                parameter: cachedBinding.bindingProperties.parameter,
-                propertyName: cachedBinding.bindingProperties.propertyName,
-                scope: newScope,
-                vm: newVM,
-                bindingValue: newBindingValue,
-                element: element
-            };
-
-            /* first INIT all bindings */
-            /* const context: BindingContext = */this.bindingEngine.bindInitPhase(bindingProperties);
-            // context.originalKey = parsedAttribute.key;
-            // context.originalValue = parsedAttribute.value;
-
-            /* next UPDATE all bindings */
-            this.bindingEngine.bindUpdatePhase(bindingProperties);
         }
 
         return content;
@@ -240,12 +201,15 @@ export class Imagine {
     /**
      * @returns true if any of the bindings has manipulated the children of this element and has taken responsibility for them
      */
-    private bindAttributes(node: HTMLElement, vm: any, templateNode?: Node, cachedBindings?: { elementId: string, bindingProperties: BindingProperties }[]): boolean {
-        let allAttributes: { key: string, value: string, bindingProperties: BindingProperties }[] = [];
+    private bindAttributes(node: HTMLElement, vm: any, templateNode?: Node, cachedBindings?: { [key: string]: BindingProperties[] }): boolean {
+        const allAttributes: { key: string, value: string, bindingProperties: BindingProperties }[] = [];
+        const makeTemplate: boolean = !!templateNode && !!cachedBindings;
+
         let someBindingControlsChildren: boolean = false;
         let elementId!: string;
+        let elementContainsNonCacheableBinding: boolean = false;
 
-        if (templateNode && cachedBindings) {
+        if (makeTemplate) {
             elementId = (Math.random() + 1).toString(36).substring(6);
         }
 
@@ -255,23 +219,31 @@ export class Imagine {
 
             const bindingProperties = this.bindingEngine.parseBinding(attributeName, attributeValue, node, vm);
 
-            if (bindingProperties !== undefined) { // undefined (not an Imagine attribute)
+            if (bindingProperties !== undefined) { // undefined (=not an Imagine attribute)
                 node.removeAttribute(attributeName);
             }
 
-            if (bindingProperties) { //not null (not able to parse) AND not undefined (not an Imagine attribute)
-                for (const properties of bindingProperties) { // bindingProperties can contain 2 bindings (in case of transform.. fix later--see comment on transform parsing)
-                    allAttributes.push({ key: attributeName, value: attributeValue, bindingProperties: properties });
-                    if (templateNode && cachedBindings) {
-                        (<HTMLElement>templateNode).removeAttribute(attributeName);
-                        cachedBindings.push({ elementId, bindingProperties: properties });
-                    }
+            if (bindingProperties) { //not null (=not able to parse) AND not undefined (=not an Imagine attribute)
+                allAttributes.push({ key: attributeName, value: attributeValue, bindingProperties });
+                if (!bindingProperties.isCacheable) {
+                    elementContainsNonCacheableBinding = true;
                 }
             }
         }
 
-        if (templateNode && cachedBindings && allAttributes.length > 0) {
+        if (makeTemplate && allAttributes.length > 0) {
             (<HTMLElement>templateNode).dataset['bindingId'] = elementId;
+            cachedBindings![elementId] = [];
+
+            if (!elementContainsNonCacheableBinding) {
+                for (let parsedAttribute of allAttributes) {
+                    (<HTMLElement>templateNode).removeAttribute(parsedAttribute.key);
+                    cachedBindings![elementId].push(parsedAttribute.bindingProperties);
+                }
+            }
+            else {
+                console.warn('[Imagine] Using logic (transforms, conditional, ternary, etc) in a template (if, foreach, etc) is not optimized. Every instance of the template has to be re-evaluated and can\'t be pre-computed.', templateNode);
+            }
         }
 
         /* first INIT all bindings */
@@ -302,14 +274,12 @@ export class Imagine {
         /* only transform directive so far, so assume that */
 
         let attribute: string = node.getAttribute('TRANSFORM') || '';
-        let parsedAttribute: BindingProperties[] | null | undefined = this.bindingEngine.parseBinding('@transform', attribute, node, vm);
+        let parsedAttribute: BindingProperties | null | undefined = this.bindingEngine.parseBinding('@transform', attribute, node, vm);
 
         if (!parsedAttribute) return;
 
-        for (const bindingProperties of parsedAttribute) { // bindingProperties can contain 2 bindings (in case of transform.. fix later--see comment on transform parsing)
-            bindingProperties.parameter = node.getAttribute('TARGET') || ''; /* only TARGET is implemented.. NAME would be the other option */
-            this.bindingEngine.bindInitPhase(bindingProperties);
-        }
+        parsedAttribute.parameter = node.getAttribute('TARGET') || ''; /* only TARGET is implemented.. NAME would be the other option */
+        this.bindingEngine.bindInitPhase(parsedAttribute);
     }
 
     // private bindInlinedText(node: HTMLElement, vm: any): Node[] | undefined {

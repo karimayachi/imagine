@@ -26,18 +26,20 @@ export class ComponentHandler implements BindingHandler {
 
 export class TextHandler implements BindingHandler {
     update(element: HTMLElement, value: string): void {
-        let transform = <{ read: Function } | Function | null>bindingEngine.getTransformFor(element, 'text');
+        // let transform = <{ read: Function } | Function | null>bindingEngine.getTransformFor(element, 'text');
 
-        /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
-        if (transform && (<{ read: Function }>transform).read && typeof (<{ read: Function }>transform).read === 'function') {
-            element.textContent = (<{ read: Function }>transform).read(value);
-        }
-        else if (transform && typeof transform === 'function') {
-            element.textContent = transform(value);
-        }
-        else {
-            element.textContent = value;
-        }
+        // /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
+        // if (transform && (<{ read: Function }>transform).read && typeof (<{ read: Function }>transform).read === 'function') {
+        //     element.textContent = (<{ read: Function }>transform).read(value);
+        // }
+        // else if (transform && typeof transform === 'function') {
+        //     element.textContent = transform(value);
+        // }
+        // else {
+        //     element.textContent = value;
+        // }
+
+        element.textContent = value;
     }
 }
 
@@ -56,32 +58,36 @@ export class VisibleHandler implements BindingHandler {
 
 export class ValueHandler implements BindingHandler {
     init(element: HTMLElement, _value: any, _contex: BindingContext, updateValue: (value: string) => void): void {
-        (<HTMLInputElement>element).addEventListener('input', (): void => {
-            let transform = <{ read: Function, write: Function } | null>bindingEngine.getTransformFor(element, 'value');
+        // (<HTMLInputElement>element).addEventListener('input', (): void => {
+        //     let transform = <{ read: Function, write: Function } | null>bindingEngine.getTransformFor(element, 'value');
 
-            /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
-            if (transform && transform.write) {
-                updateValue(transform.write((<HTMLInputElement>element).value));
-            }
-            else {
-                updateValue((<HTMLInputElement>element).value);
-            }
-        });
+        //     /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
+        //     if (transform && transform.write) {
+        //         updateValue(transform.write((<HTMLInputElement>element).value));
+        //     }
+        //     else {
+        //         updateValue((<HTMLInputElement>element).value);
+        //     }
+        // });
+
+        updateValue((<HTMLInputElement>element).value);
     }
 
     update(element: HTMLElement, value: string): void {
-        let transform = <{ read: Function } | Function | null>bindingEngine.getTransformFor(element, 'value');
+        // let transform = <{ read: Function } | Function | null>bindingEngine.getTransformFor(element, 'value');
 
-        /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
-        if (transform && (<{ read: Function }>transform).read && typeof (<{ read: Function }>transform).read === 'function') {
-            (<HTMLInputElement>element).value = (<{ read: Function }>transform).read(value);
-        }
-        else if (transform && typeof transform === 'function') {
-            (<HTMLInputElement>element).value = transform(value);
-        }
-        else {
-            (<HTMLInputElement>element).value = value;
-        }
+        // /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
+        // if (transform && (<{ read: Function }>transform).read && typeof (<{ read: Function }>transform).read === 'function') {
+        //     (<HTMLInputElement>element).value = (<{ read: Function }>transform).read(value);
+        // }
+        // else if (transform && typeof transform === 'function') {
+        //     (<HTMLInputElement>element).value = transform(value);
+        // }
+        // else {
+        //     (<HTMLInputElement>element).value = value;
+        // }
+
+        (<HTMLInputElement>element).value = value;
     }
 }
 
@@ -98,20 +104,20 @@ export class EventHandler implements BindingHandler {
 
 export class AttributeHandler implements BindingHandler {
     update(element: HTMLElement, value: string, context: BindingContext): void {
-        // setTimeout(() => {
-        let transform = <{ read: Function } | Function | null>bindingEngine.getTransformFor(element, 'attribute.' + context.parameter);
+        // let transform = <{ read: Function } | Function | null>bindingEngine.getTransformFor(element, 'attribute.' + context.parameter);
 
-        /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
-        if (transform && (<{ read: Function }>transform).read && typeof (<{ read: Function }>transform).read === 'function') {
-            element.setAttribute(context.parameter!, (<{ read: Function }>transform).read(value));
-        }
-        else if (transform && typeof transform === 'function') {
-            element.setAttribute(context.parameter!, transform(value));
-        }
-        else {
-            element.setAttribute(context.parameter!, value);
-        }
-        // }, 0);
+        // /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
+        // if (transform && (<{ read: Function }>transform).read && typeof (<{ read: Function }>transform).read === 'function') {
+        //     element.setAttribute(context.parameter!, (<{ read: Function }>transform).read(value));
+        // }
+        // else if (transform && typeof transform === 'function') {
+        //     element.setAttribute(context.parameter!, transform(value));
+        // }
+        // else {
+        //     element.setAttribute(context.parameter!, value);
+        // }
+
+        element.setAttribute(context.parameter!, value);
     }
 }
 
@@ -121,11 +127,11 @@ export class ScopeHandler implements BindingHandler {
     }
 }
 
-export class TransformHandler implements BindingHandler {
-    init(_element: HTMLElement, value: any, context: BindingContext, _updateValue: (value: string) => void): void {
+// export class TransformHandler implements BindingHandler {
+//     init(_element: HTMLElement, value: any, context: BindingContext, _updateValue: (value: string) => void): void {
 
-    }
-}
+//     }
+// }
 
 export class IfHandler implements BindingHandler {
     init(element: HTMLElement, _value: any, context: BindingContext, _updateValue: (value: string) => void): boolean {
@@ -137,11 +143,11 @@ export class IfHandler implements BindingHandler {
     }
 
     update(element: HTMLElement, value: string, context: BindingContext, _change: IArraySplice<any>): void {
-        /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
-        let transform = <{ read: Function } | Function | null>bindingEngine.getTransformFor(element, 'if');
-        if (transform && typeof transform === 'function') {
-            value = transform(value);
-        }
+        // /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
+        // let transform = <{ read: Function } | Function | null>bindingEngine.getTransformFor(element, 'if');
+        // if (transform && typeof transform === 'function') {
+        //     value = transform(value);
+        // }
 
         setTimeout(() => { // Give custom elements time to render before clearing -- TODO create task management system
             element.innerText = '';
@@ -190,18 +196,19 @@ export class HtmlHandler implements BindingHandler {
 
         if (value !== undefined && value !== null) {
             let template: HTMLTemplateElement = document.createElement('template');
-            let transform = <{ read: Function } | Function | null>bindingEngine.getTransformFor(element, 'html');
+            // let transform = <{ read: Function } | Function | null>bindingEngine.getTransformFor(element, 'html');
 
-            /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
-            if (transform && (<{ read: Function }>transform).read && typeof (<{ read: Function }>transform).read === 'function') {
-                template.innerHTML = (<{ read: Function }>transform).read(value);
-            }
-            else if (transform && typeof transform === 'function') {
-                template.innerHTML = transform(value);
-            }
-            else {
-                template.innerHTML = value;
-            }
+            // /* INSTEAD OF CHECKING FOR TRANSFORMS ON EVERY UPDATE, CHECK ONCE IN INIT AND STORE TRANSFORMS IN CONTEXT */
+            // if (transform && (<{ read: Function }>transform).read && typeof (<{ read: Function }>transform).read === 'function') {
+            //     template.innerHTML = (<{ read: Function }>transform).read(value);
+            // }
+            // else if (transform && typeof transform === 'function') {
+            //     template.innerHTML = transform(value);
+            // }
+            // else {
+            //     template.innerHTML = value;
+            // }
+            template.innerHTML = value;
 
             element.appendChild(template.content);
             setTimeout(() => { // Move init to back of callstack, so Custom Element is initialized first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
@@ -469,7 +476,8 @@ export class ForEachHandler implements BindingHandler {
                             scope: vm,
                             vm: vm,
                             parameter: selectedOrChecked,
-                            element: itemElement
+                            element: itemElement,
+                            isCacheable: true
                         };
                         bindingEngine.bindInitPhase(bindingProperties);
                         bindingEngine.bindUpdatePhase(bindingProperties);

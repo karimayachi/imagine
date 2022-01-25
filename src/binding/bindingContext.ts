@@ -12,7 +12,7 @@ export class BindingContext {
     originalKey?: string; /* store original key and value for if we need to rebind this element/context */
     originalValue?: string; /* store original key and value for if we need to rebind this element/context */
     controlsChildren: boolean; /* if true this binding controls it's child elements */
-    cachedBindings?: { elementId: string, bindingProperties: BindingProperties }[]; /* used with template. For instance in a foreach, do the heavy lifting once and cache the bindings */
+    cachedBindings?: { [key: string]: BindingProperties[] }; /* used with template. For instance in a foreach, do the heavy lifting once and cache the bindings */
 
     constructor() {
         this.propertyName = '';

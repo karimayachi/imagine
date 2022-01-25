@@ -135,9 +135,9 @@ export class ScopeHandler implements BindingHandler {
 
 export class IfHandler implements BindingHandler {
     init(element: HTMLElement, _value: any, context: BindingContext, _updateValue: (value: string) => void): boolean {
-        setTimeout(() => { // Give custom elements time to render before clearing -- TODO create task management system
+        // setTimeout(() => { // Give custom elements time to render before clearing -- TODO create task management system
             context.template = createTemplate(element);
-        }, 0);
+        // }, 0);
 
         return true; // this binding controls its own children
     }
@@ -149,7 +149,7 @@ export class IfHandler implements BindingHandler {
         //     value = transform(value);
         // }
 
-        setTimeout(() => { // Give custom elements time to render before clearing -- TODO create task management system
+        // setTimeout(() => { // Give custom elements time to render before clearing -- TODO create task management system
             element.innerText = '';
 
             if (value && context.template) {
@@ -157,7 +157,7 @@ export class IfHandler implements BindingHandler {
                 bind(context.originalVm, newItem);
                 element.appendChild(newItem);
             }
-        }, 0);
+        // }, 0);
     }
 }
 

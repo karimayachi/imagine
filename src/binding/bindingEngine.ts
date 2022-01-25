@@ -432,9 +432,9 @@ export class BindingEngine {
 
             /* restore template if there was one before */
             if (oldBindingContextTemplate !== undefined) {
-                setTimeout(() => { // schedule after init, but before update. Both need to have time-outs set
+                // setTimeout(() => { // schedule after init, but before update. Both need to have time-outs set
                     newContext.template = oldBindingContextTemplate;
-                }, 0);
+                // }, 0);
             }
 
             /* rebind update phase */

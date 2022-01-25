@@ -82,9 +82,8 @@ export class Imagine {
          * bind the content and build a new pre-processed template along the way
          */
         let content: HTMLElement | DocumentFragment = <HTMLElement | DocumentFragment>context.template!;
-        context.template = content.cloneNode(false);
 
-        //console.log(content, vm, context)
+        context.template = content.cloneNode(false);
 
         if (!context.cachedBindings) {
             context.cachedBindings = {};

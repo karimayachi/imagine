@@ -316,6 +316,9 @@ export class BindingEngine {
                 disposers.push(disposer);
             }
         }
+        else if(finalScope == null) { // binding failed and there is no dependency tree.. It will probably never resolve, so just throw the children away
+            originalElement.innerHTML = '';
+        }
 
         return finalScope;
     }
@@ -334,6 +337,7 @@ export class BindingEngine {
 
                 throw (`[Imagine] cannot parse property: ${levels[0]}`);
             case 2: // one level of namespacing
+                /* Check scope */
                 if (this.scopes.has(levels[0])) {
                     scope = this.scopes.get(levels[0]);
                 }
@@ -351,11 +355,12 @@ export class BindingEngine {
                     throw (`[Imagine] undefined scope: ${levels[0]}`);
                 }
 
+                /* Check final level on scope */
                 if (scope && levels[1] in scope) {
                     return { propertyName: levels[1], scope: scope };
                 }
 
-                return null; // wasn't able to parse binding, but don't throw yet: maybe the dependencyTree will get it to work in a future update of the viewmodel...
+                return null; // final level wasn't found on scope, but don't throw: maybe the dependencyTree will get it to work in a future update of the scope/viewmodel...
             default: // more levels, parse the lowest and go into recursion
                 if (this.scopes.has(levels[0])) {
                     scope = this.scopes.get(levels[0]);

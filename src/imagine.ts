@@ -99,7 +99,7 @@ export class Imagine {
      * and build the content and binding-cache at the same time
      */
     private recursiveBindNodesTemplate(rootNode: Node, vm: any, templateNode: Node, cachedBindings: { [key: string]: BindingProperties[] }) {
-        let someBindingControlsChildren: boolean = false;
+        let dontProcessChildren: boolean = false;
         let copyBeforeBinding: NodeList = rootNode.cloneNode(true).childNodes;
 
         if (rootNode.nodeType === 1) {
@@ -107,11 +107,11 @@ export class Imagine {
                 this.bindDirectives(<HTMLElement>rootNode, vm);
             }
             else {
-                someBindingControlsChildren = this.bindAttributes(<HTMLElement>rootNode, vm, templateNode, cachedBindings);
+                dontProcessChildren = this.bindAttributes(<HTMLElement>rootNode, vm, templateNode, cachedBindings);
             }
         }
 
-        if (!someBindingControlsChildren) {
+        if (!dontProcessChildren) {
             /* first convert any text-node children that have inlined bindings (${...}) to full format (<span @text="...">) */
             for (let index = rootNode.childNodes.length - 1; index >= 0; index--) {
                 if (rootNode.childNodes[index].nodeType === 3) {
@@ -170,9 +170,51 @@ export class Imagine {
             element.removeAttribute('data-binding-id');
             const cachedBindingsForElement: BindingProperties[] = context.cachedBindings[elementId];
 
-            if (cachedBindingsForElement.length > 0) {
+            if (cachedBindingsForElement.length > 0) { // binding is cached
                 for (let cachedBinding of cachedBindingsForElement) {
-                    const newBindingValue = this.bindingEngine.getBindingValueFromProperty(cachedBinding.propertyName, vm);
+
+                    /* When retrieving preprocessed bindingproperties from cache, there can be three
+                    * situations:
+                    * 1. The VM and SCOPE are the same.. This goes for simple property bindings (e.g.) ${title}
+                    *    in a @foreach="comments". title is a property on the first comment. 
+                    *    So we need to swap out the original VM and SCOPE with the VM of newly added item
+                    * 2. The VM and SCOPE are not the same, but SCOPE is independent of the newly added item
+                    *    e.g. @if="globalScope.user.loggedIn"
+                    *    In this case, we can just leave the SCOPE and BINDINGVALUE (and dependency tree?) in tact. 
+                    * 3. The VM and SCOPE are not the same and SCOPE is dependent on the newly added item
+                    *    e.g. ${author.name} in a @foreach="comments"
+                    *    In this case the original pre-processed binding was a dependency tree looking
+                    *    at the author of the first comment. This should be blocked by the parser and isCacheable
+                    *    should be set to false
+                    */
+                    let newBindingValue, newVM, newScope;
+
+                    if (cachedBinding.scope === cachedBinding.vm) {
+                        newBindingValue = this.bindingEngine.getBindingValueFromProperty(cachedBinding.propertyName, vm);
+                        newVM = vm;
+                        newScope = vm;
+                    }
+                    else {
+                        let namedScope = false;
+                        for (let [_key, value] of scopes) {
+                            if (value === cachedBinding.scope) {
+                                namedScope = true;
+                                break;
+                            }
+                        }
+        
+                        if (namedScope) {
+                            newBindingValue = cachedBinding.bindingValue;
+                            newVM = vm;
+                            newScope = cachedBinding.scope;
+                        }
+                        else {
+                            console.warn('Using a dependency tree in a template (if, foreach, content, etc) will prevent caching the template and each instance is re-parsed. This will impact performance.');
+                            bind(vm, element);
+                            continue;
+                            
+                        }
+                    }
 
                     const bindingProperties: BindingProperties = {
                         handler: cachedBinding.handler,
@@ -189,7 +231,7 @@ export class Imagine {
                     this.bindingEngine.bindUpdatePhase(bindingProperties);
                 }
             }
-            else {
+            else { // binding is too complex to cache.. It wasn't cached, so re-bind
                 bind(vm, element);
             }
         }
@@ -204,9 +246,11 @@ export class Imagine {
         const allAttributes: { key: string, value: string, bindingProperties: BindingProperties }[] = [];
         const makeTemplate: boolean = !!templateNode && !!cachedBindings;
 
-        let someBindingControlsChildren: boolean = false;
+        let aBindingControlsChildren: boolean = false;
+        let aBindingFailed: boolean = false;
         let elementId!: string;
         let elementContainsNonCacheableBinding: boolean = false;
+        let elementContainsBindings: boolean = false;
 
         if (makeTemplate) {
             elementId = (Math.random() + 1).toString(36).substring(6);
@@ -218,8 +262,13 @@ export class Imagine {
 
             const bindingProperties = this.bindingEngine.parseBinding(attributeName, attributeValue, node, vm);
 
-            if (bindingProperties !== undefined) { // undefined (=not an Imagine attribute)
+            if (bindingProperties !== undefined) { // undefined == not an Imagine attribute at all
                 node.removeAttribute(attributeName);
+                elementContainsBindings = true;
+            }
+
+            if(bindingProperties === null) { // null == an Imagine attribute, but failed to evaluate
+                aBindingFailed = true;
             }
 
             if (bindingProperties) { //not null (=not able to parse) AND not undefined (=not an Imagine attribute)
@@ -230,7 +279,7 @@ export class Imagine {
             }
         }
 
-        if (makeTemplate && allAttributes.length > 0) {
+        if (makeTemplate && elementContainsBindings) {
             (<HTMLElement>templateNode).dataset['bindingId'] = elementId;
             cachedBindings![elementId] = [];
 
@@ -252,11 +301,11 @@ export class Imagine {
             context.originalValue = parsedAttribute.value;
 
             if (context.controlsChildren) {
-                if (someBindingControlsChildren) {
+                if (aBindingControlsChildren) {
                     throw ('Only one binding that controls its children is allowed per element');
                 }
                 else {
-                    someBindingControlsChildren = true;
+                    aBindingControlsChildren = true;
                 }
             }
         }
@@ -266,7 +315,7 @@ export class Imagine {
             this.bindingEngine.bindUpdatePhase(parsedAttribute.bindingProperties);
         }
 
-        return someBindingControlsChildren;
+        return aBindingControlsChildren || aBindingFailed; // in both cases don't further process children...
     }
 
     private bindDirectives(node: HTMLElement, vm: any) {

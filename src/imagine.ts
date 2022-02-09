@@ -209,7 +209,7 @@ export class Imagine {
                             newScope = cachedBinding.scope;
                         }
                         else {
-                            console.warn('Using a dependency tree in a template (if, foreach, content, etc) will prevent caching the template and each instance is re-parsed. This will impact performance.');
+                            console.warn('[Imagine] Using a dependency tree in a template (if, foreach, etc) is not optimized. Every instance of the template has to be re-evaluated and can\'t be pre-computed.', element);
                             bind(vm, element);
                             continue;
                             

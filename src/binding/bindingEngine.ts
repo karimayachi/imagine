@@ -89,11 +89,11 @@ export class BindingEngine {
          * PLUS: Too many levels of 'if-else'.. refactor!!
          */
         if (parsedValue.match(primitiveRegEx)) { // primitive
-            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parsedValue, operator + name, parsedValue, node) || {};
+            let { propertyName, scope, isAbsoluteScope } = this.resolveScopeAndCreateDependencyTree(vm, parsedValue, operator + name, parsedValue, node) || {};
             bindingProperties.propertyName = propertyName || bindingProperties.propertyName;
             bindingProperties.scope = scope;
 
-            bindingProperties.isCacheable = true; // FOR NOW ONLY PRIMITIVE BINDINGS ARE CACHEABLE
+            bindingProperties.isCacheable =  isAbsoluteScope || (scope === vm); // FOR NOW ONLY PRIMITIVE BINDINGS ARE CACHEABLE -- ALSO NO DEPENDENCY TREE IS ALLOWED (vm === scope) (exception: if the dependency tree is absolute - not relative to the current viewmodel)
 
             if (propertyName !== undefined) {
                 bindingProperties.bindingValue = this.getBindingValueFromProperty(propertyName, scope);
@@ -269,9 +269,9 @@ export class BindingEngine {
         }
     }
 
-    private resolveScopeAndCreateDependencyTree(scope: any, namespace: string, originalName: string, originalValue: string, originalElement: HTMLElement): { propertyName: string, scope: any } | null {
+    private resolveScopeAndCreateDependencyTree(scope: any, namespace: string, originalName: string, originalValue: string, originalElement: HTMLElement): { propertyName: string, scope: any, isAbsoluteScope: boolean } | null {
         let dependencyTree: { vm: any, property: string }[] = [];
-        let finalScope: { propertyName: string, scope: any } | null = this.recursiveResolveScope(scope, namespace, dependencyTree);
+        let finalScope: { propertyName: string, scope: any, isAbsoluteScope: boolean } | null = this.recursiveResolveScope(scope, namespace, dependencyTree);
 
         /* build the dependency tree */
         if (dependencyTree.length > 0) {
@@ -323,22 +323,28 @@ export class BindingEngine {
         return finalScope;
     }
 
-    private recursiveResolveScope(currentScope: any, namespace: string, dependencyTree: { vm: any, property: string }[]): { propertyName: string, scope: any } | null {
+    /* Named scopes and paths starting from a named scope are absolute. They are not relative to the current viewmodel.
+     * This is important for templates, since bindings that are relative to the current instance of a template cannot 
+     * be cached.
+     */
+    private recursiveResolveScope(currentScope: any, namespace: string, dependencyTree: { vm: any, property: string }[]): { propertyName: string, scope: any, isAbsoluteScope: boolean } | null {
         let levels: string[] = namespace.split('.');
         let scope: any = currentScope;
+        let isAbsoluteScope: boolean = false;
 
         switch (levels.length) {
             case 1: // current level, no namespace
                 if (/^'\w+'$/gm.test(levels[0]) || // string value ('someText')
                     levels[0] === 'this' ||
                     levels[0] in currentScope) {
-                    return { propertyName: levels[0], scope: scope };
+                    return { propertyName: levels[0], scope, isAbsoluteScope };
                 }
 
                 throw (`[Imagine] cannot parse property: ${levels[0]}`);
             case 2: // one level of namespacing
                 /* Check scope */
                 if (this.scopes.has(levels[0])) {
+                    isAbsoluteScope = true;
                     scope = this.scopes.get(levels[0]);
                 }
                 else if (typeof currentScope !== 'object' && typeof currentScope !== 'undefined' && currentScope !== null) {
@@ -357,12 +363,13 @@ export class BindingEngine {
 
                 /* Check final level on scope */
                 if (scope && levels[1] in scope) {
-                    return { propertyName: levels[1], scope: scope };
+                    return { propertyName: levels[1], scope: scope, isAbsoluteScope };
                 }
 
                 return null; // final level wasn't found on scope, but don't throw: maybe the dependencyTree will get it to work in a future update of the scope/viewmodel...
             default: // more levels, parse the lowest and go into recursion
                 if (this.scopes.has(levels[0])) {
+                    isAbsoluteScope = true;
                     scope = this.scopes.get(levels[0]);
                 }
                 else if (typeof currentScope !== 'object' && typeof currentScope !== 'undefined' && currentScope !== null) {

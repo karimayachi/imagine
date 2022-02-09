@@ -195,25 +195,9 @@ export class Imagine {
                         newScope = vm;
                     }
                     else {
-                        let namedScope = false;
-                        for (let [_key, value] of scopes) {
-                            if (value === cachedBinding.scope) {
-                                namedScope = true;
-                                break;
-                            }
-                        }
-        
-                        if (namedScope) {
-                            newBindingValue = cachedBinding.bindingValue;
-                            newVM = vm;
-                            newScope = cachedBinding.scope;
-                        }
-                        else {
-                            console.warn('[Imagine] Using a dependency tree in a template (if, foreach, etc) is not optimized. Every instance of the template has to be re-evaluated and can\'t be pre-computed.', element);
-                            bind(vm, element);
-                            continue;
-                            
-                        }
+                        newBindingValue = cachedBinding.bindingValue;
+                        newVM = vm;
+                        newScope = cachedBinding.scope;
                     }
 
                     const bindingProperties: BindingProperties = {
@@ -267,7 +251,7 @@ export class Imagine {
                 elementContainsBindings = true;
             }
 
-            if(bindingProperties === null) { // null == an Imagine attribute, but failed to evaluate
+            if (bindingProperties === null) { // null == an Imagine attribute, but failed to evaluate
                 aBindingFailed = true;
             }
 
@@ -290,7 +274,7 @@ export class Imagine {
                 }
             }
             else {
-                console.warn('[Imagine] Using logic (transforms, conditional, ternary, etc) in a template (if, foreach, etc) is not optimized. Every instance of the template has to be re-evaluated and can\'t be pre-computed.', templateNode);
+                console.warn('[Imagine] Using logic (transforms, conditional, ternary, etc) or a dependency tree in a template (if, foreach, etc) is not optimized. Every instance of the template has to be re-evaluated and can\'t be pre-computed.', templateNode);
             }
         }
 

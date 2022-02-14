@@ -205,8 +205,8 @@ export class Imagine {
                         parameter: cachedBinding.parameter,
                         propertyName: cachedBinding.propertyName,
                         isCacheable: cachedBinding.isCacheable,
-                        scope: vm,
-                        vm: vm,
+                        scope: newScope,
+                        vm: newVM,
                         bindingValue: newBindingValue,
                         element: element
                     };

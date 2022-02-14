@@ -233,16 +233,6 @@ export class BindingEngine {
             bindingProperties.bindingValue = bindingValue;
         }
 
-
-        /* event-bindings should be run in their original scope. even if the binding comes from a different scope.
-         * for instance a foreach loop containing a click binding to app.clickHandler should (upon click) execute clickHandler
-         * FROM the app-scope, but execute it IN the foreach scope.
-         * Not at all pleased with this exception to the rule. TODO: Make this a general case
-         */
-        if (bindingProperties.handler == '__event') {
-            bindingProperties.scope = vm;
-        }
-
         return bindingProperties;
     }
 

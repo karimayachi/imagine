@@ -96,7 +96,7 @@ export class EventHandler implements BindingHandler {
         if (typeof value === 'function') {
             (<HTMLInputElement>element).addEventListener(context.parameter!, (event: Event): void => {
                 event.stopPropagation();
-                value(context.vm, event);
+                value(context.originalVm, event);
             });
         }
     }
@@ -213,7 +213,7 @@ export class HtmlHandler implements BindingHandler {
             element.appendChild(template.content);
             setTimeout(() => { // Move init to back of callstack, so Custom Element is initialized first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
                 for (let index = 0; index < element.childNodes.length; index++) {
-                    bind(context.vm, <HTMLElement>element.childNodes[index]);
+                    bind(context.originalVm, <HTMLElement>element.childNodes[index]);
                 }
             }, 0);
         }

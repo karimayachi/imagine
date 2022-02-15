@@ -226,9 +226,18 @@ export class ContentHandler implements BindingHandler {
     }
 
     update(element: HTMLElement, value: any, context: BindingContext, change: IArraySplice<any>): void {
-        if (value && value.contentTemplate) {
-            element.innerHTML = value.contentTemplate;
-            bind(value, element);
+        let vm: any;
+
+        if(typeof value === 'function') { 
+            vm = new value(context.originalVm);
+        }
+        else {
+            vm = value;
+        }
+
+        if (vm && vm.contentTemplate) {
+            element.innerHTML = vm.contentTemplate;
+            bind(vm, element);
         }
         else {
             element.innerText = '';

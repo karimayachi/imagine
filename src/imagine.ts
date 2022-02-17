@@ -170,7 +170,10 @@ export class Imagine {
         const content: HTMLElement = <HTMLElement>context.template!.cloneNode(true);
 
         for (let elementId of Object.keys(context.cachedBindings)) {
-            const element: HTMLElement = content.dataset['bindingId'] === elementId ? content : <HTMLElement>content.querySelector(`[data-binding-id="${elementId}"]`);
+            const element: HTMLElement = (content.dataset && content.dataset['bindingId'] === elementId) 
+                ? content 
+                : <HTMLElement>content.querySelector(`[data-binding-id="${elementId}"]`);
+                
             element.removeAttribute('data-binding-id');
             const cachedBindingsForElement: BindingProperties[] = context.cachedBindings[elementId];
 

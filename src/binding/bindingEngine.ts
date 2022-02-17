@@ -2,7 +2,7 @@ import { isObservableProp, observe, IValueDidChange, isObservableArray, isObserv
 import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler, VisibleHandler, ScopeHandler, IfHandler, ContentHandler, ComponentHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { PropertyHandler } from './propertyBinding';
-import { bind, contexts, scopes } from '../index';
+import { bindWithParent } from '../index';
 
 interface BindingHandlers {
     [key: string]: BindingHandler
@@ -18,7 +18,7 @@ export class BindingEngine {
         this.scopes = new Map<string, any>();
     }
 
-    parseBinding = (key: string, value: string, node: HTMLElement, vm: any): BindingProperties | null | undefined => {
+    parseBinding = (key: string, value: string, node: HTMLElement, vm: any, parentVm: any): BindingProperties | null | undefined => {
         let name: string;
         let parsedValue: string;
         let operator: string = key[0];
@@ -89,7 +89,7 @@ export class BindingEngine {
          * PLUS: Too many levels of 'if-else'.. refactor!!
          */
         if (parsedValue.match(primitiveRegEx)) { // primitive
-            let { propertyName, scope, isAbsoluteScope } = this.resolveScopeAndCreateDependencyTree(vm, parsedValue, operator + name, parsedValue, node) || {};
+            let { propertyName, scope, isAbsoluteScope } = this.resolveScopeAndCreateDependencyTree(vm, parentVm, parsedValue, operator + name, parsedValue, node) || {};
             bindingProperties.propertyName = propertyName || bindingProperties.propertyName;
             bindingProperties.scope = scope;
 
@@ -105,7 +105,7 @@ export class BindingEngine {
         else if (parsedValue.match(ternaryRegEx)) { // ternary conditional
             let parts: RegExpExecArray = ternaryRegEx.exec(parsedValue)!;
             let conditional: string = parts[1];
-            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, conditional, operator + name, parsedValue, node) || {};
+            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parentVm, conditional, operator + name, parsedValue, node) || {};
 
             if (propertyName === undefined) return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
 
@@ -136,7 +136,7 @@ export class BindingEngine {
             let conditional: string = parts[1];
             let equality: string = parts[2]; // == or !=
             let condition: string | number = parsedValue.match(compStringRegEx) ? parts[3] : parseInt(parts[3]);
-            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, conditional, operator + name, parsedValue, node) || {};
+            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parentVm, conditional, operator + name, parsedValue, node) || {};
             if (propertyName === undefined) return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
 
             if (propertyName in scope) {
@@ -158,7 +158,7 @@ export class BindingEngine {
             let binding: any;
 
             /* parse the transform */
-            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, transformPart, operator + name, parsedValue, node) || {};
+            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parentVm, transformPart, operator + name, parsedValue, node) || {};
             if (propertyName !== undefined) {
                 transformFunction = this.getBindingValueFromProperty(propertyName, scope);
             }
@@ -168,7 +168,7 @@ export class BindingEngine {
             }
 
             /* parse the regular binding */
-            ({ propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, bindingPart, operator + name, parsedValue, node) || {});
+            ({ propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parentVm, bindingPart, operator + name, parsedValue, node) || {});
             if (propertyName !== undefined) {
                 binding = this.getBindingValueFromProperty(propertyName, scope);
             }
@@ -183,7 +183,7 @@ export class BindingEngine {
             bindingProperties.scope = scope;
         }
         else if (parsedValue[0] == '!') { // simplified negation
-            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parsedValue.substr(1), operator + name, parsedValue, node) || {};
+            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parentVm, parsedValue.substr(1), operator + name, parsedValue, node) || {};
             if (propertyName === undefined) return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
 
             let bindingValue: IComputedValue<boolean> = computed((): boolean => !scope[<string>propertyName]);
@@ -200,7 +200,7 @@ export class BindingEngine {
             let allBindingsParsed = true;
             for (let i = 0; i < elements.length; i++) {
                 if (!elements[i].match(stringRegex)) {
-                    let { propertyName } = this.resolveScopeAndCreateDependencyTree(vm, elements[i], operator + name, parsedValue, node) || {};
+                    let { propertyName } = this.resolveScopeAndCreateDependencyTree(vm, parentVm, elements[i], operator + name, parsedValue, node) || {};
                     if (propertyName === undefined) {
                         allBindingsParsed = false;
                         continue; // wasn't able to parse binding. maybe dependencyTree will pick it up later
@@ -218,7 +218,7 @@ export class BindingEngine {
                         concatenatedString += stringRegex.exec(elements[i])![1];
                     }
                     else {
-                        let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, elements[i], operator + name, parsedValue, node)!;
+                        let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parentVm, elements[i], operator + name, parsedValue, node)!;
 
                         if (propertyName in scope) {
                             concatenatedString += scope[propertyName];
@@ -259,9 +259,9 @@ export class BindingEngine {
         }
     }
 
-    private resolveScopeAndCreateDependencyTree(scope: any, namespace: string, originalName: string, originalValue: string, originalElement: HTMLElement): { propertyName: string, scope: any, isAbsoluteScope: boolean } | null {
+    private resolveScopeAndCreateDependencyTree(scope: any, parentScope: any, namespace: string, originalName: string, originalValue: string, originalElement: HTMLElement): { propertyName: string, scope: any, isAbsoluteScope: boolean } | null {
         let dependencyTree: { vm: any, property: string }[] = [];
-        let finalScope: { propertyName: string, scope: any, isAbsoluteScope: boolean } | null = this.recursiveResolveScope(scope, namespace, dependencyTree);
+        let finalScope: { propertyName: string, scope: any, isAbsoluteScope: boolean } | null = this.recursiveResolveScope(scope, parentScope, namespace, dependencyTree);
 
         /* build the dependency tree */
         if (dependencyTree.length > 0) {
@@ -290,7 +290,7 @@ export class BindingEngine {
                         originalElement.appendChild(nodeToRestore);
                     }
 
-                    const controlsChildren: boolean = this.rebind(originalName, originalValue, scope, originalElement);
+                    const controlsChildren: boolean = this.rebind(originalName, originalValue, scope, parentScope, originalElement);
 
                     /* if we restored the stored child elements, we need te bind them, unless the originalelement binding
                      * controls the child elements (@if binding, etc)
@@ -298,7 +298,7 @@ export class BindingEngine {
                     if (!controlsChildren) {
                         for (let i = 0; i < originalElement.childNodes.length; i++) {
                             const nodeToBind: ChildNode = originalElement.childNodes[i];
-                            bind(scope, nodeToBind);
+                            bindWithParent(scope, parentScope, nodeToBind);
                         }
                     }
                 });
@@ -317,7 +317,7 @@ export class BindingEngine {
      * This is important for templates, since bindings that are relative to the current instance of a template cannot 
      * be cached.
      */
-    private recursiveResolveScope(currentScope: any, namespace: string, dependencyTree: { vm: any, property: string }[]): { propertyName: string, scope: any, isAbsoluteScope: boolean } | null {
+    private recursiveResolveScope(currentScope: any, parentScope: any, namespace: string, dependencyTree: { vm: any, property: string }[]): { propertyName: string, scope: any, isAbsoluteScope: boolean } | null {
         let levels: string[] = namespace.split('.');
         let scope: any = currentScope;
         let isAbsoluteScope: boolean = false;
@@ -328,6 +328,9 @@ export class BindingEngine {
                     levels[0] === 'this' ||
                     levels[0] in currentScope) {
                     return { propertyName: levels[0], scope, isAbsoluteScope };
+                }
+                else if(levels[0] === 'super'){
+                    return { propertyName: 'super', scope: parentScope, isAbsoluteScope };
                 }
 
                 throw (`[Imagine] cannot parse property: ${levels[0]}`);
@@ -342,6 +345,10 @@ export class BindingEngine {
                 }
                 else if (typeof currentScope === 'undefined' || currentScope === null || Object.keys(toJS(scope)).length === 0) {
                     return null; // stop binding, but do keep the dependencyTree, maybe it will resolve later
+                }
+                else if (levels[0] === 'super') {
+                    // dependencyTree.push({ vm: ??, property: ?? }); //no dependencies on super
+                    scope = parentScope;
                 }
                 else if (levels[0] in currentScope) {
                     dependencyTree.push({ vm: currentScope, property: levels[0] });
@@ -368,6 +375,10 @@ export class BindingEngine {
                 else if (typeof currentScope === 'undefined' || currentScope === null || Object.keys(toJS(scope)).length === 0) {
                     return null; // stop binding, but do keep the dependencyTree, maybe it will resolve later
                 }
+                else if (levels[0] === 'super') {
+                    // dependencyTree.push({ vm: ??, property: ?? }); //no dependencies on super
+                    scope = parentScope;
+                }
                 else if (levels[0] in currentScope) {
                     dependencyTree.push({ vm: currentScope, property: levels[0] });
                     scope = currentScope[levels[0]];
@@ -376,7 +387,7 @@ export class BindingEngine {
                     throw (`[Imagine] undefined scope: ${levels[0]}`);
                 }
 
-                return this.recursiveResolveScope(scope, levels.slice(1).join('.'), dependencyTree);
+                return this.recursiveResolveScope(scope, parentScope, levels.slice(1).join('.'), dependencyTree);
         }
     }
 
@@ -394,7 +405,7 @@ export class BindingEngine {
 
             for (let context of contextsToIterateOver) {
                 if (context.originalKey && context.originalValue) { // I believe only template-context created in 'bind' don't fill this requirement, but I can't remember what that context is for in the first place
-                    childrenAreUnderControl = this.rebind(context.originalKey, context.originalValue, vm, element) || childrenAreUnderControl;
+                    childrenAreUnderControl = this.rebind(context.originalKey, context.originalValue, vm, context.parentVm, element) || childrenAreUnderControl;
                 }
             }
         }
@@ -409,8 +420,8 @@ export class BindingEngine {
     /**
      * @returns true if child nodes were updated during rebind, false otherwise
      */
-    private rebind(originalName: string, originalValue: string, originalVM: any, originalElement: HTMLElement): boolean {
-        let newBindingProperties: BindingProperties | null | undefined = this.parseBinding(originalName, originalValue, originalElement, originalVM);
+    private rebind(originalName: string, originalValue: string, originalVM: any, originalParent: any, originalElement: HTMLElement): boolean {
+        let newBindingProperties: BindingProperties | null | undefined = this.parseBinding(originalName, originalValue, originalElement, originalVM, originalParent);
         let oldBindingContextTemplate: any;
         let bindingControlsChildren: boolean = false;
 
@@ -430,6 +441,7 @@ export class BindingEngine {
             const newContext: BindingContext = this.bindInitPhase(newBindingProperties, true);
             newContext.originalKey = originalName;
             newContext.originalValue = originalValue;
+            newContext.parentVm = originalParent;
             bindingControlsChildren = bindingControlsChildren || newContext.controlsChildren; // in case EITHER of the bindings (in case of transform) controls it's children
 
             /* restore template if there was one before */
@@ -507,7 +519,17 @@ export class BindingEngine {
                             throw new Error(`Cannot pass array to regular observable '${bindingProperties.propertyName}'`);
                         }
                         else {
-                            bindingProperties.bindingValue.set(value);
+                            /* If value hasn't changed, observers will not be called by MobX.
+                             * this is of course correct behaviour. However, it prevents the reset
+                             * of the CircularUpdatePrevention and that gets stuck in Prevent-mode
+                             * So manually reset it, if no changes are propagated
+                             */
+                            if(bindingProperties.bindingValue.get() === value) {
+                                context.preventCircularUpdateIn = false;
+                            }
+                            else {
+                                bindingProperties.bindingValue.set(value);
+                            }
                         }
                     }
                     else {

@@ -32,7 +32,11 @@ export class Imagine {
         //     }
         // }
 
-        this.recursiveBindNodes(element, vm);
+        this.bindWithParent(vm, null, element);
+    }
+
+    bindWithParent = (vm: any, parentVm: any, element: Node): void => {
+        this.recursiveBindNodes(element, vm, parentVm);
     }
 
     // private recursiveBindNodes(rootNode: Node, vm: any) {
@@ -89,7 +93,7 @@ export class Imagine {
             context.cachedBindings = {};
         }
 
-        this.recursiveBindNodesTemplate(content, vm, context.template, context.cachedBindings);
+        this.recursiveBindNodesTemplate(content, vm, context.originalVm, context.template, context.cachedBindings);
 
         return content;
     }
@@ -98,16 +102,16 @@ export class Imagine {
      * A variant of recursiveBindNodes that is used in recursiveBindAndCache
      * and build the content and binding-cache at the same time
      */
-    private recursiveBindNodesTemplate(rootNode: Node, vm: any, templateNode: Node, cachedBindings: { [key: string]: BindingProperties[] }) {
+    private recursiveBindNodesTemplate(rootNode: Node, vm: any, parentVm: any, templateNode: Node, cachedBindings: { [key: string]: BindingProperties[] }) {
         let dontProcessChildren: boolean = false;
         let copyBeforeBinding: NodeList = rootNode.cloneNode(true).childNodes;
 
         if (rootNode.nodeType === 1) {
             if ((<HTMLElement>rootNode).tagName === 'IMAGINE-TRANSFORM') {
-                this.bindDirectives(<HTMLElement>rootNode, vm);
+                this.bindDirectives(<HTMLElement>rootNode, vm, parentVm);
             }
             else {
-                dontProcessChildren = this.bindAttributes(<HTMLElement>rootNode, vm, templateNode, cachedBindings);
+                dontProcessChildren = this.bindAttributes(<HTMLElement>rootNode, vm, parentVm, templateNode, cachedBindings);
             }
         }
 
@@ -122,7 +126,7 @@ export class Imagine {
             for (let index = 0, stop = rootNode.childNodes.length; index < stop; index++) {
                 const newChildTemplateNode = rootNode.childNodes[index].cloneNode(false);
                 templateNode.appendChild(newChildTemplateNode);
-                this.recursiveBindNodesTemplate(rootNode.childNodes[index], vm, newChildTemplateNode, cachedBindings);
+                this.recursiveBindNodesTemplate(rootNode.childNodes[index], vm, parentVm, newChildTemplateNode, cachedBindings);
             }
         }
         else { // if children are controlled by this sub-binding, then leave them in tact and put them in the template as-is
@@ -132,15 +136,15 @@ export class Imagine {
         }
     }
 
-    private recursiveBindNodes(rootNode: Node, vm: any) {
+    private recursiveBindNodes(rootNode: Node, vm: any, parentVm: any) {
         let someBindingControlsChildren: boolean = false;
 
         if (rootNode.nodeType === 1) {
             if ((<HTMLElement>rootNode).tagName === 'IMAGINE-TRANSFORM') {
-                this.bindDirectives(<HTMLElement>rootNode, vm);
+                this.bindDirectives(<HTMLElement>rootNode, vm, parentVm);
             }
             else {
-                someBindingControlsChildren = this.bindAttributes(<HTMLElement>rootNode, vm);
+                someBindingControlsChildren = this.bindAttributes(<HTMLElement>rootNode, vm, parentVm);
             }
         }
 
@@ -153,7 +157,7 @@ export class Imagine {
             }
 
             for (let index = rootNode.childNodes.length - 1; index >= 0; index--) {
-                this.recursiveBindNodes(rootNode.childNodes[index], vm);
+                this.recursiveBindNodes(rootNode.childNodes[index], vm, parentVm);
             }
         }
     }
@@ -211,12 +215,13 @@ export class Imagine {
                         element: element
                     };
 
-                    this.bindingEngine.bindInitPhase(bindingProperties);
+                    let bindingContext: BindingContext = this.bindingEngine.bindInitPhase(bindingProperties);
+                    bindingContext.parentVm = context.originalVm;
                     this.bindingEngine.bindUpdatePhase(bindingProperties);
                 }
             }
             else { // binding is too complex to cache.. It wasn't cached, so re-bind
-                bind(vm, element);
+                this.bindWithParent(vm, context.originalVm, element);
             }
         }
 
@@ -226,7 +231,7 @@ export class Imagine {
     /**
      * @returns true if any of the bindings has manipulated the children of this element and has taken responsibility for them
      */
-    private bindAttributes(node: HTMLElement, vm: any, templateNode?: Node, cachedBindings?: { [key: string]: BindingProperties[] }): boolean {
+    private bindAttributes(node: HTMLElement, vm: any, parentVm: any, templateNode?: Node, cachedBindings?: { [key: string]: BindingProperties[] }): boolean {
         const allAttributes: { key: string, value: string, bindingProperties: BindingProperties }[] = [];
         const makeTemplate: boolean = !!templateNode && !!cachedBindings;
 
@@ -244,7 +249,7 @@ export class Imagine {
             const attributeName: string = node.attributes[index].name;
             const attributeValue: string = node.attributes[index].value;
 
-            const bindingProperties = this.bindingEngine.parseBinding(attributeName, attributeValue, node, vm);
+            const bindingProperties = this.bindingEngine.parseBinding(attributeName, attributeValue, node, vm, parentVm);
 
             if (bindingProperties !== undefined) { // undefined == not an Imagine attribute at all
                 node.removeAttribute(attributeName);
@@ -283,6 +288,7 @@ export class Imagine {
             const context: BindingContext = this.bindingEngine.bindInitPhase(parsedAttribute.bindingProperties);
             context.originalKey = parsedAttribute.key;
             context.originalValue = parsedAttribute.value;
+            context.parentVm = parentVm;
 
             if (context.controlsChildren) {
                 if (aBindingControlsChildren) {
@@ -302,11 +308,11 @@ export class Imagine {
         return aBindingControlsChildren || aBindingFailed; // in both cases don't further process children...
     }
 
-    private bindDirectives(node: HTMLElement, vm: any) {
+    private bindDirectives(node: HTMLElement, vm: any, parentVm: any) {
         /* only transform directive so far, so assume that */
 
         let attribute: string = node.getAttribute('TRANSFORM') || '';
-        let parsedAttribute: BindingProperties | null | undefined = this.bindingEngine.parseBinding('@transform', attribute, node, vm);
+        let parsedAttribute: BindingProperties | null | undefined = this.bindingEngine.parseBinding('@transform', attribute, node, vm, parentVm);
 
         if (!parsedAttribute) return;
 

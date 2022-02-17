@@ -10,7 +10,7 @@ export class PropertyHandler implements BindingHandler {
             let propertyName: string = context.parameter!;
             
             let caseSensitiveDescriptor: { descriptor: PropertyDescriptor, caseSensitiveName: string } | null = getPropertyDescriptorFromPrototypeChain(element, propertyName);
-            // console.log('----- INIT PROPERTY', propertyName, context)
+            //console.log('----- INIT PROPERTY', propertyName, context)
             if (caseSensitiveDescriptor) { // configure existing property
                 context.parameter = caseSensitiveDescriptor.caseSensitiveName; // update the context to match the real properyname
 
@@ -109,6 +109,7 @@ export class PropertyHandler implements BindingHandler {
     }
 
     update(element: HTMLElement, value: string, context: BindingContext, change: IArraySplice<any>): void {
+        //console.log(element, value, context)
         setTimeout(() => { // Move update to back of callstack, so Custom Element is initialized first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
             context.preventCircularUpdate = true;
             (<any>element)[context.parameter!] = value;

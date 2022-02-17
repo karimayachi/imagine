@@ -1,5 +1,5 @@
 import { BindingContext } from './bindingContext';
-import { bind, scopes, bindingEngine, recursiveBindAndCache, finalizeCachedBinding, contexts } from '../index';
+import { bind, scopes, bindingEngine, recursiveBindAndCache, finalizeCachedBinding, contexts, bindWithParent } from '../index';
 import { IArraySplice, observe, observable, IArrayChange, getAtom, IObservableArray } from 'mobx';
 import { BindingProperties } from './bindingEngine';
 
@@ -154,7 +154,7 @@ export class IfHandler implements BindingHandler {
 
             if (value && context.template) {
                 let newItem: HTMLElement = <HTMLElement>context.template.cloneNode(true);
-                bind(context.originalVm, newItem);
+                bindWithParent(context.originalVm, context.parentVm, newItem);
                 element.appendChild(newItem);
             }
         // }, 0);
@@ -179,9 +179,9 @@ export class ContextHandler implements BindingHandler {
         element.innerText = '';
 
         if (value !== undefined && value !== null && context.template) {
-            let newItem: HTMLElement = <HTMLElement>context.template.cloneNode(true);
-            bind(value, newItem);
-            element.appendChild(newItem);
+            const newElement: HTMLElement = <HTMLElement>context.template.cloneNode(true);
+            bindWithParent(value, context.originalVm, newElement);
+            element.appendChild(newElement);
         }
     }
 }
@@ -213,7 +213,7 @@ export class HtmlHandler implements BindingHandler {
             element.appendChild(template.content);
             setTimeout(() => { // Move init to back of callstack, so Custom Element is initialized first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
                 for (let index = 0; index < element.childNodes.length; index++) {
-                    bind(context.originalVm, <HTMLElement>element.childNodes[index]);
+                    bindWithParent(context.originalVm, context.parentVm, <HTMLElement>element.childNodes[index]);
                 }
             }, 0);
         }
@@ -237,7 +237,7 @@ export class ContentHandler implements BindingHandler {
 
         if (vm && vm.contentTemplate) {
             element.innerHTML = vm.contentTemplate;
-            bind(vm, element);
+            bindWithParent(vm, context.originalVm, element);
         }
         else {
             element.innerText = '';

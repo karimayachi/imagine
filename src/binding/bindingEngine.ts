@@ -96,7 +96,7 @@ export class BindingEngine {
             bindingProperties.isCacheable =  isAbsoluteScope || (scope === vm); // FOR NOW ONLY PRIMITIVE BINDINGS ARE CACHEABLE -- ALSO NO DEPENDENCY TREE IS ALLOWED (vm === scope) (exception: if the dependency tree is absolute - not relative to the current viewmodel)
 
             if (propertyName !== undefined) {
-                bindingProperties.bindingValue = this.getBindingValueFromProperty(propertyName, scope);
+                bindingProperties.bindingValue = this.getBindingValueFromProperty(propertyName, scope, parentVm);
             }
             else {
                 return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
@@ -160,7 +160,7 @@ export class BindingEngine {
             /* parse the transform */
             let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parentVm, transformPart, operator + name, parsedValue, node) || {};
             if (propertyName !== undefined) {
-                transformFunction = this.getBindingValueFromProperty(propertyName, scope);
+                transformFunction = this.getBindingValueFromProperty(propertyName, scope, parentVm);
             }
 
             if (typeof transformFunction !== 'function') {
@@ -170,7 +170,7 @@ export class BindingEngine {
             /* parse the regular binding */
             ({ propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parentVm, bindingPart, operator + name, parsedValue, node) || {});
             if (propertyName !== undefined) {
-                binding = this.getBindingValueFromProperty(propertyName, scope);
+                binding = this.getBindingValueFromProperty(propertyName, scope, parentVm);
             }
             else {
                 return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
@@ -236,12 +236,15 @@ export class BindingEngine {
         return bindingProperties;
     }
 
-    getBindingValueFromProperty(propertyName: string, viewmodel: any): any {
+    getBindingValueFromProperty(propertyName: string, viewmodel: any, parentViewmodel: any): any {
         if (/^'\w+'$/gm.test(propertyName)) { // string value ('someText')
             return propertyName.substring(1, propertyName.length - 1);
         }
         else if (propertyName === 'this') {
             return viewmodel;
+        }
+        else if (propertyName === 'super' && parentViewmodel) {
+            return parentViewmodel;
         }
         else if (viewmodel instanceof Object && propertyName in viewmodel) { // viewmodel is an object / viewmodel and value is a property on object / viewmodel
             if (isObservableArray(viewmodel[propertyName])) { // value is an observable array property

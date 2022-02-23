@@ -138,7 +138,9 @@ export class Imagine {
         }
         else { // if children are controlled by this sub-binding, then leave them in tact and put them in the template as-is
             for (let index = 0, stop = copyBeforeBinding.length; index < stop; index++) {
-                templateNode.appendChild(copyBeforeBinding[index]);
+                if(copyBeforeBinding[index].nodeType === 1) {
+                    templateNode.appendChild(copyBeforeBinding[index]);
+                }
             }
         }
     }
@@ -204,7 +206,7 @@ export class Imagine {
                     let newBindingValue, newVM, newScope;
 
                     if (cachedBinding.scope === cachedBinding.vm) {
-                        newBindingValue = this.bindingEngine.getBindingValueFromProperty(cachedBinding.propertyName, vm);
+                        newBindingValue = this.bindingEngine.getBindingValueFromProperty(cachedBinding.propertyName, vm, context.parentVm);
                         newVM = vm;
                         newScope = vm;
                     }

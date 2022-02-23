@@ -104,6 +104,7 @@ export class Imagine {
      */
     private recursiveBindNodesTemplate(rootNode: Node, vm: any, parentVm: any, templateNode: Node, cachedBindings: { [key: string]: BindingProperties[] }) {
         let dontProcessChildren: boolean = false;
+        let stopTemplating: boolean = false;
         let copyBeforeBinding: NodeList = rootNode.cloneNode(true).childNodes;
 
         if (rootNode.nodeType === 1) {
@@ -111,7 +112,7 @@ export class Imagine {
                 this.bindDirectives(<HTMLElement>rootNode, vm, parentVm);
             }
             else {
-                dontProcessChildren = this.bindAttributes(<HTMLElement>rootNode, vm, parentVm, templateNode, cachedBindings);
+                ({ dontProcessChildren, stopTemplating } = this.bindAttributes(<HTMLElement>rootNode, vm, parentVm, templateNode, cachedBindings));
             }
         }
 
@@ -126,7 +127,13 @@ export class Imagine {
             for (let index = 0, stop = rootNode.childNodes.length; index < stop; index++) {
                 const newChildTemplateNode = rootNode.childNodes[index].cloneNode(false);
                 templateNode.appendChild(newChildTemplateNode);
-                this.recursiveBindNodesTemplate(rootNode.childNodes[index], vm, parentVm, newChildTemplateNode, cachedBindings);
+                
+                if(stopTemplating) {
+                    this.recursiveBindNodes(rootNode.childNodes[index], vm, parentVm);
+                }
+                else {
+                    this.recursiveBindNodesTemplate(rootNode.childNodes[index], vm, parentVm, newChildTemplateNode, cachedBindings);
+                }
             }
         }
         else { // if children are controlled by this sub-binding, then leave them in tact and put them in the template as-is
@@ -137,18 +144,18 @@ export class Imagine {
     }
 
     private recursiveBindNodes(rootNode: Node, vm: any, parentVm: any) {
-        let someBindingControlsChildren: boolean = false;
+        let dontProcessChildren: boolean = false;
 
         if (rootNode.nodeType === 1) {
             if ((<HTMLElement>rootNode).tagName === 'IMAGINE-TRANSFORM') {
                 this.bindDirectives(<HTMLElement>rootNode, vm, parentVm);
             }
             else {
-                someBindingControlsChildren = this.bindAttributes(<HTMLElement>rootNode, vm, parentVm);
+                ({ dontProcessChildren } = this.bindAttributes(<HTMLElement>rootNode, vm, parentVm));
             }
         }
 
-        if (!someBindingControlsChildren) {
+        if (!dontProcessChildren) {
             /* first convert any text-node children that have inlined bindings (${...}) to full format (<span @text="...">) */
             for (let index = rootNode.childNodes.length - 1; index >= 0; index--) {
                 if (rootNode.childNodes[index].nodeType === 3) {
@@ -170,10 +177,10 @@ export class Imagine {
         const content: HTMLElement = <HTMLElement>context.template!.cloneNode(true);
 
         for (let elementId of Object.keys(context.cachedBindings)) {
-            const element: HTMLElement = (content.dataset && content.dataset['bindingId'] === elementId) 
-                ? content 
+            const element: HTMLElement = (content.dataset && content.dataset['bindingId'] === elementId)
+                ? content
                 : <HTMLElement>content.querySelector(`[data-binding-id="${elementId}"]`);
-                
+
             element.removeAttribute('data-binding-id');
             const cachedBindingsForElement: BindingProperties[] = context.cachedBindings[elementId];
 
@@ -234,7 +241,7 @@ export class Imagine {
     /**
      * @returns true if any of the bindings has manipulated the children of this element and has taken responsibility for them
      */
-    private bindAttributes(node: HTMLElement, vm: any, parentVm: any, templateNode?: Node, cachedBindings?: { [key: string]: BindingProperties[] }): boolean {
+    private bindAttributes(node: HTMLElement, vm: any, parentVm: any, templateNode?: Node, cachedBindings?: { [key: string]: BindingProperties[] }): { dontProcessChildren: boolean, stopTemplating: boolean } {
         const allAttributes: { key: string, value: string, bindingProperties: BindingProperties }[] = [];
         const makeTemplate: boolean = !!templateNode && !!cachedBindings;
 
@@ -308,7 +315,7 @@ export class Imagine {
             this.bindingEngine.bindUpdatePhase(parsedAttribute.bindingProperties);
         }
 
-        return aBindingControlsChildren || aBindingFailed; // in both cases don't further process children...
+        return { dontProcessChildren: aBindingControlsChildren || aBindingFailed, stopTemplating: elementContainsNonCacheableBinding };
     }
 
     private bindDirectives(node: HTMLElement, vm: any, parentVm: any) {

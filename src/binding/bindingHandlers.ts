@@ -70,7 +70,9 @@ export class ValueHandler implements BindingHandler {
         //     }
         // });
 
-        updateValue((<HTMLInputElement>element).value);
+        (<HTMLInputElement>element).addEventListener('input', (): void => {
+            updateValue((<HTMLInputElement>element).value);
+        });
     }
 
     update(element: HTMLElement, value: string): void {
@@ -136,7 +138,7 @@ export class ScopeHandler implements BindingHandler {
 export class IfHandler implements BindingHandler {
     init(element: HTMLElement, _value: any, context: BindingContext, _updateValue: (value: string) => void): boolean {
         // setTimeout(() => { // Give custom elements time to render before clearing -- TODO create task management system
-            context.template = createTemplate(element);
+        context.template = createTemplate(element);
         // }, 0);
 
         return true; // this binding controls its own children
@@ -150,13 +152,13 @@ export class IfHandler implements BindingHandler {
         // }
 
         // setTimeout(() => { // Give custom elements time to render before clearing -- TODO create task management system
-            element.innerText = '';
+        element.innerText = '';
 
-            if (value && context.template) {
-                let newItem: HTMLElement = <HTMLElement>context.template.cloneNode(true);
-                bindWithParent(context.originalVm, context.parentVm, newItem);
-                element.appendChild(newItem);
-            }
+        if (value && context.template) {
+            let newItem: HTMLElement = <HTMLElement>context.template.cloneNode(true);
+            bindWithParent(context.originalVm, context.parentVm, newItem);
+            element.appendChild(newItem);
+        }
         // }, 0);
     }
 }
@@ -228,7 +230,7 @@ export class ContentHandler implements BindingHandler {
     update(element: HTMLElement, value: any, context: BindingContext, change: IArraySplice<any>): void {
         let vm: any;
 
-        if(typeof value === 'function') { 
+        if (typeof value === 'function') {
             vm = new value(context.originalVm);
         }
         else {
@@ -344,7 +346,7 @@ export class ForEachHandler implements BindingHandler {
              * as index, in stead of a seperate number index?
              */
             let elementsToAdd: ChildNode[];
-            if(content instanceof DocumentFragment) {
+            if (content instanceof DocumentFragment) {
                 elementsToAdd = Array.from(content.childNodes); /* .childNodes seems to be a bit faster than .children (Chrome 94) (and we already remove non-elements from the template anyway, so childNodes is safe) */
             }
             else {
@@ -359,15 +361,15 @@ export class ForEachHandler implements BindingHandler {
                 (<any[]>context.bindingData).push(elementsToAdd);
                 element.appendChild(content);
             }
-            
+
             /* find web-components in added nodes */
             let webcomponents: ChildNode[] = [];
-            for(let el of (<HTMLElement[]>elementsToAdd)) {
-                if('tagName' in el && el.tagName.includes('-')) {
+            for (let el of (<HTMLElement[]>elementsToAdd)) {
+                if ('tagName' in el && el.tagName.includes('-')) {
                     webcomponents.push(el);
                 }
-                for(let child of (<HTMLElement>el).querySelectorAll('*')) {
-                    if('tagName' in child && child.tagName.includes('-')) {
+                for (let child of (<HTMLElement>el).querySelectorAll('*')) {
+                    if ('tagName' in child && child.tagName.includes('-')) {
                         webcomponents.push(child);
                     }
                 }
@@ -377,7 +379,7 @@ export class ForEachHandler implements BindingHandler {
         }
 
         function hookUpSelectedItems(webcomponents: { webcomponents: ChildNode[] | null, item: any }[]) {
-            if(!('selecteditem' in element || 'selecteditems' in element)) {
+            if (!('selecteditem' in element || 'selecteditems' in element)) {
                 return;
             }
 

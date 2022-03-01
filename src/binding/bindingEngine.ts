@@ -154,7 +154,7 @@ export class BindingEngine {
             const parts: RegExpExecArray = transformRegEx.exec(parsedValue)!;
             const transformPart: string = parts[1];
             const bindingPart: string = parts[2];
-            let transformFunction: Function | undefined;
+            let transformFunction: Function | { read: Function, write: Function} | undefined;
             let binding: any;
 
             /* parse the transform */
@@ -163,7 +163,8 @@ export class BindingEngine {
                 transformFunction = this.getBindingValueFromProperty(propertyName, scope, parentVm);
             }
 
-            if (typeof transformFunction !== 'function') {
+            if (typeof transformFunction !== 'function' &&
+                !(typeof transformFunction === 'object' && 'write' in transformFunction && 'read' in transformFunction)) {
                 throw new Error(`[Imagine] couldn\'t find transform \'${transformPart}\'`);
             }
 
@@ -177,7 +178,13 @@ export class BindingEngine {
             }
 
             /* construct the transformed binding */
-            const bindingValue: IComputedValue<boolean> = computed((): any => transformFunction!(binding));
+            const bindingValue: IComputedValue<boolean> = typeof transformFunction === 'function'
+                ? computed((): any => (<Function>transformFunction)(this.unwrap(binding)))
+                : computed((): any => (<{read:Function}>transformFunction).read(this.unwrap(binding)),
+                           (value: any): void => {
+                               binding.set((<{write:Function}>transformFunction).write(value));
+                           });
+
             bindingProperties.propertyName = propertyName;
             bindingProperties.bindingValue = bindingValue;
             bindingProperties.scope = scope;

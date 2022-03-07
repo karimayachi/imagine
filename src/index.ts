@@ -9,7 +9,7 @@ declare global {
 const ImagineInstance = new Imagine();
 
 /* this arbitrarily exposing of members and having statics at the same time (BindingHandlers) is a mess :-) */
-export { observable, computed, observe, decorate, isObservable, isObservableArray, isObservableProp, isObservableObject, getAtom, trace, autorun } from 'mobx';
+export { observable, computed, observe, decorate, isObservable, isObservableArray, isObservableProp, isObservableObject, getAtom, trace, autorun, reaction } from 'mobx';
 export const bind = ImagineInstance.bind;
 export const bindWithParent = ImagineInstance.bindWithParent;
 export const recursiveBindAndCache = ImagineInstance.recursiveBindAndCache;

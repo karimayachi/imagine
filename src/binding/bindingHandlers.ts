@@ -211,7 +211,7 @@ export class HtmlHandler implements BindingHandler {
             //     template.innerHTML = value;
             // }
             template.innerHTML = value;
-            
+
             setTimeout(() => { // Move init to back of callstack, so Custom Element is initialized first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
                 for (let index = 0; index < template.content.childNodes.length; index++) {
                     bindWithParent(context.originalVm, context.parentVm, <HTMLElement>template.content.childNodes[index]);

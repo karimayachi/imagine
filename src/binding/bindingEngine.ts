@@ -93,7 +93,7 @@ export class BindingEngine {
             bindingProperties.propertyName = propertyName || bindingProperties.propertyName;
             bindingProperties.scope = scope;
 
-            bindingProperties.isCacheable =  isAbsoluteScope || (scope === vm); // FOR NOW ONLY PRIMITIVE BINDINGS ARE CACHEABLE -- ALSO NO DEPENDENCY TREE IS ALLOWED (vm === scope) (exception: if the dependency tree is absolute - not relative to the current viewmodel)
+            bindingProperties.isCacheable = isAbsoluteScope || (scope === vm); // FOR NOW ONLY PRIMITIVE BINDINGS ARE CACHEABLE -- ALSO NO DEPENDENCY TREE IS ALLOWED (vm === scope) (exception: if the dependency tree is absolute - not relative to the current viewmodel)
 
             if (propertyName !== undefined) {
                 bindingProperties.bindingValue = this.getBindingValueFromProperty(propertyName, scope, parentVm);
@@ -154,7 +154,7 @@ export class BindingEngine {
             const parts: RegExpExecArray = transformRegEx.exec(parsedValue)!;
             const transformPart: string = parts[1];
             const bindingPart: string = parts[2];
-            let transformFunction: Function | { read: Function, write: Function} | undefined;
+            let transformFunction: Function | { read: Function, write: Function } | undefined;
             let binding: any;
 
             /* parse the transform */
@@ -180,10 +180,10 @@ export class BindingEngine {
             /* construct the transformed binding */
             const bindingValue: IComputedValue<boolean> = typeof transformFunction === 'function'
                 ? computed((): any => (<Function>transformFunction)(this.unwrap(binding)))
-                : computed((): any => (<{read:Function}>transformFunction).read(this.unwrap(binding)),
-                           (value: any): void => {
-                               binding.set((<{write:Function}>transformFunction).write(value));
-                           });
+                : computed((): any => (<{ read: Function }>transformFunction).read(this.unwrap(binding)),
+                    (value: any): void => {
+                        binding.set((<{ write: Function }>transformFunction).write(value));
+                    });
 
             bindingProperties.propertyName = propertyName;
             bindingProperties.bindingValue = bindingValue;
@@ -286,7 +286,7 @@ export class BindingEngine {
 
             for (let treeNode of dependencyTree) {
                 const disposer: Lambda = observe(treeNode.vm, treeNode.property, (change): void => {
-                    //console.log('DEPENDENCY TREE TRIGGERED FOR', treeNode, originalName);
+                    //console.log('DEPENDENCY TREE TRIGGERED FOR', treeNode, change.newValue === change.oldValue, originalName);
                     /* somewhere in the observed path a node is changed
                      * dispose of all listeners and (try to) rebind the whole path to it's original binding
                      */
@@ -316,7 +316,7 @@ export class BindingEngine {
                 disposers.push(disposer);
             }
         }
-        else if(finalScope == null) { // binding failed and there is no dependency tree.. It will probably never resolve, so just throw the children away
+        else if (finalScope == null) { // binding failed and there is no dependency tree.. It will probably never resolve, so just throw the children away
             originalElement.innerHTML = '';
         }
 
@@ -339,7 +339,7 @@ export class BindingEngine {
                     levels[0] in currentScope) {
                     return { propertyName: levels[0], scope, isAbsoluteScope };
                 }
-                else if(levels[0] === 'super'){
+                else if (levels[0] === 'super') {
                     return { propertyName: 'super', scope: parentScope, isAbsoluteScope };
                 }
 
@@ -433,6 +433,7 @@ export class BindingEngine {
     private rebind(originalName: string, originalValue: string, originalVM: any, originalParent: any, originalElement: HTMLElement): boolean {
         let newBindingProperties: BindingProperties | null | undefined = this.parseBinding(originalName, originalValue, originalElement, originalVM, originalParent);
         let oldBindingContextTemplate: any;
+        let oldCachedBindings: any;
         let bindingControlsChildren: boolean = false;
 
         if (newBindingProperties) {
@@ -443,6 +444,7 @@ export class BindingEngine {
 
                 if (contextsForElement.has(contextIdentifier)) {
                     oldBindingContextTemplate = contextsForElement.get(contextIdentifier)?.template; // Save a template if there was one... For 'if' and 'foreach' bindings that loose their template otherwise...
+                    oldCachedBindings = contextsForElement.get(contextIdentifier)?.cachedBindings; // And the cached bindings that go with it, if any
                     contextsForElement.delete(contextIdentifier);
                 }
             }
@@ -456,9 +458,10 @@ export class BindingEngine {
 
             /* restore template if there was one before */
             if (oldBindingContextTemplate !== undefined) {
-                // setTimeout(() => { // schedule after init, but before update. Both need to have time-outs set
-                    newContext.template = oldBindingContextTemplate;
-                // }, 0);
+                newContext.template = oldBindingContextTemplate;
+            }
+            if (oldCachedBindings !== undefined) {
+                newContext.cachedBindings = oldCachedBindings;
             }
 
             /* rebind update phase */
@@ -534,7 +537,7 @@ export class BindingEngine {
                              * of the CircularUpdatePrevention and that gets stuck in Prevent-mode
                              * So manually reset it, if no changes are propagated
                              */
-                            if(bindingProperties.bindingValue.get() === value) {
+                            if (bindingProperties.bindingValue.get() === value) {
                                 context.preventCircularUpdateIn = false;
                             }
                             else {

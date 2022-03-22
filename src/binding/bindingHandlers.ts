@@ -25,6 +25,12 @@ export class ComponentHandler implements BindingHandler {
 }
 
 export class TextHandler implements BindingHandler {
+    init(element: HTMLElement, _value: any, _contex: BindingContext, updateValue: (value: string) => void): void {
+        (<HTMLInputElement>element).addEventListener('input', (): void => { // for contentEditable
+            updateValue((<HTMLInputElement>element).innerText);
+        });
+    }
+
     update(element: HTMLElement, value: string): void {
         // let transform = <{ read: Function } | Function | null>bindingEngine.getTransformFor(element, 'text');
 
@@ -150,7 +156,7 @@ export class IfHandler implements BindingHandler {
         // if (transform && typeof transform === 'function') {
         //     value = transform(value);
         // }
-
+        
         // setTimeout(() => { // Give custom elements time to render before clearing -- TODO create task management system
         element.innerText = '';
 

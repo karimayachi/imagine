@@ -243,12 +243,13 @@ export class ContentHandler implements BindingHandler {
             vm = value;
         }
 
+        element.innerText = '';
+        
         if (vm && vm.contentTemplate) {
-            element.innerHTML = vm.contentTemplate;
-            bindWithParent(vm, context.originalVm, element);
-        }
-        else {
-            element.innerText = '';
+            const newElement: HTMLTemplateElement = document.createElement('template');
+            newElement.innerHTML = vm.contentTemplate;
+            bindWithParent(vm, context.originalVm, newElement.content);
+            element.append(newElement.content);
         }
     }
 }

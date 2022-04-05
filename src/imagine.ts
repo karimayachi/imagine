@@ -377,7 +377,7 @@ export class Imagine {
 
                 if (matches![i]) {
                     let bindingElement: HTMLSpanElement = document.createElement('span');
-                    bindingElement.setAttribute('data-text', matches![i].substring(2, matches![i].length - 1));
+                    bindingElement.setAttribute('imagine-text', matches![i].substring(2, matches![i].length - 1));
                     newNodeList.push(bindingElement);
                 }
             }

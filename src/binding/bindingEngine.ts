@@ -24,17 +24,17 @@ export class BindingEngine {
         let operator: string = key[0];
 
         if (key === '@' || key === '#' || key === '_' || key === ':') {  // key is in form '@="{key: foreach, value: author.publications}"' or '#="{key: click, value: doSomething}"'
-            let json: { key: string, value: string } = JSON.parse(value.replace(/'/g, "\""));
+            let json: { key: string, value: string } = JSON.parse(value.replace(/'/g, '\"'));
             name = json.key;
             parsedValue = json.value;
         }
-        else if (key.substr(0, 5) === 'data-') { // key is in form 'data-text="author.publications"' or 'data-value="someValue"' (only works with build in bindings for now)
-            name = key.substr(5);
+        else if (key.substring(0, 8) === 'imagine-') { // key is in form 'imagine-text="author.publications"' or 'imagine-value="someValue"' (only works with build in bindings for now)
+            name = key.substring(8);
             operator = '@';
             parsedValue = value;
         }
         else {                  // key is in form '@foreach="author.publications"' or '#click="doSomething"'
-            name = key.substr(1);
+            name = key.substring(1);
             parsedValue = value;
         }
 

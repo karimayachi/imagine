@@ -50,7 +50,7 @@ export class PropertyHandler implements BindingHandler {
                     /* CASE 4: We're two-way binding a newly created property of the WebComponent
                      * to a property on the VM
                      */
-                    let closureValue: any = observable.box();
+                    let closureValue: any;
                     let newProperties: object = {};
                     // let transform = <{ read: Function, write: Function } | Function | null>bindingEngine.getTransformFor(element, 'property.' + propertyName);
                     /* CHECK FOR TRANSFORM ONLY ON CREATION OF THE PROPERTY.. IS THIS ENOUGH? */
@@ -58,7 +58,7 @@ export class PropertyHandler implements BindingHandler {
                     Object.defineProperty(newProperties, propertyName, {
                         enumerable: true,
                         configurable: true,
-                        get: (): any => closureValue.get(),
+                        get: (): any => closureValue,
                         set: (value: any): void => {
                             // if (transform && (<{ read: Function }>transform).read && typeof (<{ read: Function }>transform).read === 'function') {
                             //     closureValue.set((<{ read: Function }>transform).read(value));
@@ -67,7 +67,7 @@ export class PropertyHandler implements BindingHandler {
                             //     closureValue.set(transform(value));
                             // }
                             // else {
-                                closureValue.set(value);
+                                closureValue = value;
                             // }
 
                             if (!context.preventCircularUpdate) {

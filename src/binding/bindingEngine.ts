@@ -1,8 +1,9 @@
-import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue, IObjectDidChange, Lambda, toJS, isComputed } from 'mobx';
+import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue, IObjectDidChange, Lambda, toJS, IObservableValue } from 'mobx';
 import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler, VisibleHandler, ScopeHandler, IfHandler, ContentHandler, ComponentHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { PropertyHandler } from './propertyBinding';
 import { bindWithParent } from '../index';
+import { isObservableValue } from 'mobx/lib/internal';
 
 interface BindingHandlers {
     [key: string]: BindingHandler
@@ -284,36 +285,51 @@ export class BindingEngine {
                 }
             }
 
+            const changeFunction = (_change: IValueDidChange<unknown> | IObjectDidChange): void => {
+                //console.log('DEPENDENCY TREE TRIGGERED FOR', treeNode, change.newValue === change.oldValue, originalName);
+                /* somewhere in the observed path a node is changed
+                 * dispose of all listeners and (try to) rebind the whole path to it's original binding
+                 */
+                for (let dispose of disposers) {
+                    dispose();
+                }
+
+                /* restore the original DOM structure */
+                while (storedChildElements.childNodes.length > 0) {
+                    const nodeToRestore = storedChildElements.childNodes[0];
+                    originalElement.appendChild(nodeToRestore);
+                }
+
+                const controlsChildren: boolean = this.rebind(originalName, originalValue, scope, parentScope, originalElement);
+
+                /* if we restored the stored child elements, we need te bind them, unless the originalelement binding
+                 * controls the child elements (@if binding, etc)
+                 */
+                if (!controlsChildren) {
+                    for (let i = 0; i < originalElement.childNodes.length; i++) {
+                        const nodeToBind: ChildNode = originalElement.childNodes[i];
+                        bindWithParent(scope, parentScope, nodeToBind);
+                    }
+                }
+            };
+
             for (let treeNode of dependencyTree) {
-                const disposer: Lambda = observe(treeNode.vm, treeNode.property, (change): void => {
-                    //console.log('DEPENDENCY TREE TRIGGERED FOR', treeNode, change.newValue === change.oldValue, originalName);
-                    /* somewhere in the observed path a node is changed
-                     * dispose of all listeners and (try to) rebind the whole path to it's original binding
-                     */
-                    for (let dispose of disposers) {
-                        dispose();
-                    }
+                let disposer: Lambda | undefined;
 
-                    /* restore the original DOM structure */
-                    while (storedChildElements.childNodes.length > 0) {
-                        const nodeToRestore = storedChildElements.childNodes[0];
-                        originalElement.appendChild(nodeToRestore);
-                    }
+                if (isObservableProp(treeNode.vm, treeNode.property)) {
+                    disposer = observe(treeNode.vm, treeNode.property, changeFunction);
+                }
+                /* Fix for a very very fringy case: where somewhere in the dependency tree a property is not really a native property
+                 * but mapped through a getter or proxy or decorator to another class and we get just the ObservableValue back
+                 */
+                else if (isObservable(treeNode.property)) {
+                    disposer = observe(treeNode.property, changeFunction);
+                }
+                /* END FIX */
 
-                    const controlsChildren: boolean = this.rebind(originalName, originalValue, scope, parentScope, originalElement);
-
-                    /* if we restored the stored child elements, we need te bind them, unless the originalelement binding
-                     * controls the child elements (@if binding, etc)
-                     */
-                    if (!controlsChildren) {
-                        for (let i = 0; i < originalElement.childNodes.length; i++) {
-                            const nodeToBind: ChildNode = originalElement.childNodes[i];
-                            bindWithParent(scope, parentScope, nodeToBind);
-                        }
-                    }
-                });
-
-                disposers.push(disposer);
+                if (disposer) {
+                    disposers.push(disposer);
+                }
             }
         }
         else if (finalScope == null) { // binding failed and there is no dependency tree.. It will probably never resolve, so just throw the children away
@@ -328,6 +344,14 @@ export class BindingEngine {
      * be cached.
      */
     private recursiveResolveScope(currentScope: any, parentScope: any, namespace: string, dependencyTree: { vm: any, property: string }[]): { propertyName: string, scope: any, isAbsoluteScope: boolean } | null {
+        /* Fix for a very very fringy case: where somewhere in the dependency tree a property is not really a native property
+         * but mapped through a getter or proxy or decorator to another class and we get just the ObservableValue back
+         */
+        if (currentScope?.constructor.name === 'ObservableValue') {
+            currentScope = currentScope.get();
+        }
+        /* END FIX */
+
         let levels: string[] = namespace.split('.');
         let scope: any = currentScope;
         let isAbsoluteScope: boolean = false;
@@ -369,6 +393,15 @@ export class BindingEngine {
                 }
 
                 /* Check final level on scope */
+
+                /* Fix for a very very fringy case: where somewhere in the dependency tree a property is not really a native property
+                 * but mapped through a getter or proxy or decorator to another class and we get just the ObservableValue back
+                 */
+                if (scope?.constructor.name === 'ObservableValue') {
+                    scope = scope.get();
+                }
+                /* END FIX */
+
                 if (scope && levels[1] in scope) {
                     return { propertyName: levels[1], scope: scope, isAbsoluteScope };
                 }

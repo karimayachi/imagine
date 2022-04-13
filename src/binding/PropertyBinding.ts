@@ -50,7 +50,8 @@ export class PropertyHandler implements BindingHandler {
                     /* CASE 4: We're two-way binding a newly created property of the WebComponent
                      * to a property on the VM
                      */
-                    let closureValue: any;
+                    let dummyObservableValue: any = observable.box();
+                    let realValue: any;
                     let newProperties: object = {};
                     // let transform = <{ read: Function, write: Function } | Function | null>bindingEngine.getTransformFor(element, 'property.' + propertyName);
                     /* CHECK FOR TRANSFORM ONLY ON CREATION OF THE PROPERTY.. IS THIS ENOUGH? */
@@ -58,7 +59,10 @@ export class PropertyHandler implements BindingHandler {
                     Object.defineProperty(newProperties, propertyName, {
                         enumerable: true,
                         configurable: true,
-                        get: (): any => closureValue,
+                        get: (): any => {
+                            dummyObservableValue.get(); // just to trigger tracking -- mobx creates an computed around this getter/setter and needs an observable to track within.
+                            return realValue; // don't return the observable value however, becauses in case of a plain object it gets wrapped by mobx (proxied) and we want the original value, not the proxy
+                        },
                         set: (value: any): void => {
                             // if (transform && (<{ read: Function }>transform).read && typeof (<{ read: Function }>transform).read === 'function') {
                             //     closureValue.set((<{ read: Function }>transform).read(value));
@@ -67,7 +71,8 @@ export class PropertyHandler implements BindingHandler {
                             //     closureValue.set(transform(value));
                             // }
                             // else {
-                                closureValue = value;
+                                dummyObservableValue.set(value); // just to trigger tracking
+                                realValue = value; // store unwrapped original
                             // }
 
                             if (!context.preventCircularUpdate) {

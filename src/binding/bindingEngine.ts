@@ -1,8 +1,8 @@
-import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue, IObjectDidChange, Lambda } from 'mobx';
-import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler, VisibleHandler, ScopeHandler, IfHandler, TransformHandler, ContentHandler, ComponentHandler } from './bindingHandlers';
+import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue, IObjectDidChange, Lambda, toJS, IObservableValue } from 'mobx';
+import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler, VisibleHandler, ScopeHandler, IfHandler, ContentHandler, ComponentHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { PropertyHandler } from './propertyBinding';
-import { bind } from '../index';
+import { bindWithParent } from '../index';
 
 interface BindingHandlers {
     [key: string]: BindingHandler
@@ -18,22 +18,27 @@ export class BindingEngine {
         this.scopes = new Map<string, any>();
     }
 
-    parseBinding = (key: string, value: string, node: HTMLElement, vm: any): BindingProperties | null => {
+    parseBinding = (key: string, value: string, node: HTMLElement, vm: any, parentVm: any): BindingProperties | null | undefined => {
         let name: string;
         let parsedValue: string;
         let operator: string = key[0];
 
-        if (key.length === 1) {  // key is in form '@="{key: foreach, value: author.publications}"' or '#="{key: click, value: doSomething}"'
-            let json: { key: string, value: string } = JSON.parse(value.replace(/'/g, "\""));
+        if (key === '@' || key === '#' || key === '_' || key === ':') {  // key is in form '@="{key: foreach, value: author.publications}"' or '#="{key: click, value: doSomething}"'
+            let json: { key: string, value: string } = JSON.parse(value.replace(/'/g, '\"'));
             name = json.key;
             parsedValue = json.value;
         }
+        else if (key.substring(0, 8) === 'imagine-') { // key is in form 'imagine-text="author.publications"' or 'imagine-value="someValue"' (only works with build in bindings for now)
+            name = key.substring(8);
+            operator = '@';
+            parsedValue = value;
+        }
         else {                  // key is in form '@foreach="author.publications"' or '#click="doSomething"'
-            name = key.substr(1);
+            name = key.substring(1);
             parsedValue = value;
         }
 
-        let bindingProperties: BindingProperties = { handler: '', parameter: '', propertyName: parsedValue, vm: vm, scope: null, bindingValue: null, element: node };
+        let bindingProperties: BindingProperties = { handler: '', parameter: '', propertyName: parsedValue, vm: vm, scope: null, bindingValue: null, element: node, isCacheable: false };
 
         switch (operator) {
             case '@':
@@ -57,7 +62,12 @@ export class BindingEngine {
                 bindingProperties.parameter = name;
                 break;
             default:
-                return null;
+                /* At this point the whole attribute couldn't be recognized. Return undefined to mean that we should 
+                 * ignore this attribute (it is not an Imagine attribute). If we get passed this point and fail to 
+                 * parse the value, we must return null in stead. This means: it is an Imagine attribute, but we couldn't
+                 * resolve it. Maybe later it will succeed to parse.
+                 */
+                return undefined;
         }
 
         /* Parse the passed value. THIS IS BY NO MEANS A COMPLETE PARSER, IT ONLY HANDLES SOME STRAIGHTFORWARD CASES AS A PROOF OF CONCEPT!
@@ -69,54 +79,34 @@ export class BindingEngine {
          * - string concatenation (<namespace.>propertyName + '<string>' + ...) I.e. 'https://url.com/' + person.personalPage. TODO: better to use template literals
          * - transforms (<namespace.>transform(<namespace.>propertyName)) I.e. stringToDate(article.createdAt)
          */
-        const primitiveRegEx: RegExp = /^[\w.]+$/gm;
+        const primitiveRegEx: RegExp = /^[\w.']+$/gm;
         const ternaryRegEx: RegExp = /^([\w.]+)\s*\?\s*'([\w\s:\-?!+\/#=]+)'\s*:\s*'([\w\s:\-?!+\/#=]+)'\s*$/gm;
-        const compStringRegEx: RegExp = /^([\w.]+)\s*==\s*'([\w\s:\-?!+\/#=]+)'\s*$/gm;
-        const compNumberRegEx: RegExp = /^([\w.]+)\s*==\s*([0-9]+)\s*$/gm;
+        const compStringRegEx: RegExp = /^([\w.]+)\s*(==|!=)\s*'([\w\s:\-?!+\/#=]*)'\s*$/gm;
+        const compNumberRegEx: RegExp = /^([\w.]+)\s*(==|!=)\s*([0-9]+)\s*$/gm;
         const transformRegEx: RegExp = /^(\S+)\((\S+)\)$/gm
 
-        /* TODO: use dependency injection for the different parsers below? */
-
+        /* TODO: use dependency injection for the different parsers below?
+         * PLUS: Too many levels of 'if-else'.. refactor!!
+         */
         if (parsedValue.match(primitiveRegEx)) { // primitive
-            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parsedValue, operator + name, parsedValue, node) || {};
+            let { propertyName, scope, isAbsoluteScope } = this.resolveScopeAndCreateDependencyTree(vm, parentVm, parsedValue, operator + name, parsedValue, node) || {};
             bindingProperties.propertyName = propertyName || bindingProperties.propertyName;
             bindingProperties.scope = scope;
 
+            bindingProperties.isCacheable = isAbsoluteScope || (scope === vm); // FOR NOW ONLY PRIMITIVE BINDINGS ARE CACHEABLE -- ALSO NO DEPENDENCY TREE IS ALLOWED (vm === scope) (exception: if the dependency tree is absolute - not relative to the current viewmodel)
+
             if (propertyName !== undefined) {
-                if (propertyName === 'this') {
-                    bindingProperties.bindingValue = scope;
-                }
-                else if (scope instanceof Object) { // scope is an object / viewmodel
-                    if (propertyName in scope) { // value is a property on object / viewmodel
-                        if (isObservableArray(scope[propertyName])) { // value is an observable array property
-                            bindingProperties.bindingValue = scope[propertyName];
-                        }
-                        else if (isObservableProp(scope, propertyName)) { // value is an observable property
-                            bindingProperties.bindingValue = getAtom(scope, propertyName);
-                        }
-                        else if (typeof scope[propertyName] === 'function') { // value is a method on scope
-                            bindingProperties.bindingValue = scope[propertyName];
-                        }
-                        else { // non-observable property on scope
-                            bindingProperties.bindingValue = scope[propertyName];
-                        }
-                    }
-                }
+                bindingProperties.bindingValue = this.getBindingValueFromProperty(propertyName, scope, parentVm);
             }
-            else { // probably stop, but first check for 1 special case: a string is passed in stead of a property
-                if (parsedValue.indexOf('.') < 0) { // treat as string.. only used for scope-binding.. find a cleaner solution than to mix string syntax with parameter syntax
-                    bindingProperties.bindingValue = parsedValue;
-                    bindingProperties.scope = vm;
-                }
-                else {
-                    return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
-                }
+            else {
+                return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
             }
         }
         else if (parsedValue.match(ternaryRegEx)) { // ternary conditional
             let parts: RegExpExecArray = ternaryRegEx.exec(parsedValue)!;
             let conditional: string = parts[1];
-            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, conditional, operator + name, parsedValue, node) || {};
+            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parentVm, conditional, operator + name, parsedValue, node) || {};
+
             if (propertyName === undefined) return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
 
             /* in theory, you could use 'this' here if you're in a foreach iterating over an array of observable booleans
@@ -144,12 +134,13 @@ export class BindingEngine {
         else if (parsedValue.match(compNumberRegEx) || parsedValue.match(compStringRegEx)) { // comparison conditional
             let parts: RegExpExecArray = parsedValue.match(compStringRegEx) ? compStringRegEx.exec(parsedValue)! : compNumberRegEx.exec(parsedValue)!;
             let conditional: string = parts[1];
-            let condition: string | number = parsedValue.match(compStringRegEx) ? parts[2] : parseInt(parts[2]);
-            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, conditional, operator + name, parsedValue, node) || {};
+            let equality: string = parts[2]; // == or !=
+            let condition: string | number = parsedValue.match(compStringRegEx) ? parts[3] : parseInt(parts[3]);
+            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parentVm, conditional, operator + name, parsedValue, node) || {};
             if (propertyName === undefined) return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
 
             if (propertyName in scope) {
-                let bindingValue: IComputedValue<boolean> = computed((): boolean => scope[<string>propertyName] === condition);
+                let bindingValue: IComputedValue<boolean> = computed((): boolean => equality === '==' ? scope[<string>propertyName] === condition : scope[<string>propertyName] !== condition);
 
                 bindingProperties.propertyName = propertyName;
                 bindingProperties.bindingValue = bindingValue;
@@ -160,40 +151,46 @@ export class BindingEngine {
             }
         }
         else if (parsedValue.match(transformRegEx)) { // transform binding
-            let parts: RegExpExecArray = transformRegEx.exec(parsedValue)!;
-            let transform: string = parts[1];
-            let binding: string = parts[2];
+            const parts: RegExpExecArray = transformRegEx.exec(parsedValue)!;
+            const transformPart: string = parts[1];
+            const bindingPart: string = parts[2];
+            let transformFunction: Function | { read: Function, write: Function } | undefined;
+            let binding: any;
 
-            /* register the transform */
-            let parsedAttribute = this.parseBinding('@transform', transform, node, vm);
+            /* parse the transform */
+            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parentVm, transformPart, operator + name, parsedValue, node) || {};
+            if (propertyName !== undefined) {
+                transformFunction = this.getBindingValueFromProperty(propertyName, scope, parentVm);
+            }
 
-            if (parsedAttribute === null || typeof parsedAttribute.bindingValue === 'string') { // also check for string binding (this comes from line 107 -- special SCOPE handling).. very ugly, should be replaced
-                console.warn(`[Imagine] couldn\'t find transform \'${transform}\'`);
+            if (typeof transformFunction !== 'function' &&
+                !(typeof transformFunction === 'object' && 'write' in transformFunction && 'read' in transformFunction)) {
+                throw new Error(`[Imagine] couldn\'t find transform \'${transformPart}\'`);
+            }
+
+            /* parse the regular binding */
+            ({ propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parentVm, bindingPart, operator + name, parsedValue, node) || {});
+            if (propertyName !== undefined) {
+                binding = this.getBindingValueFromProperty(propertyName, scope, parentVm);
             }
             else {
-                /* if the handler starts with __ it's a handler that requires extra info. e.g. __attribute or __property
-                 * so register the transform to the complete path (e.g. attribute.style or property.maxCharacters)
-                 * if it is a regular handler, just register the transform to the handler. (e.g. text or value)
-                 */
-                parsedAttribute.parameter = bindingProperties.handler.startsWith('__')
-                    ? bindingProperties.handler.substr(2) + '.' + name
-                    : name;
-
-                this.bindInitPhase(parsedAttribute);
+                return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
             }
 
-            /* register the regular binding */
-            let parsedAttributeForBinding = this.parseBinding(key, binding, node, vm);
-            if (parsedAttributeForBinding === null) {
-                return null;
-            }
-            this.bindInitPhase(parsedAttributeForBinding);
-            this.bindUpdatePhase(parsedAttributeForBinding);
+            /* construct the transformed binding */
+            const bindingValue: IComputedValue<boolean> = typeof transformFunction === 'function'
+                ? computed((): any => (<Function>transformFunction)(this.unwrap(binding)))
+                : computed((): any => (<{ read: Function }>transformFunction).read(this.unwrap(binding)),
+                    (value: any): void => {
+                        binding.set((<{ write: Function }>transformFunction).write(value));
+                    });
 
-            return null;
+            bindingProperties.propertyName = propertyName;
+            bindingProperties.bindingValue = bindingValue;
+            bindingProperties.scope = scope;
         }
         else if (parsedValue[0] == '!') { // simplified negation
-            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parsedValue.substr(1), operator + name, parsedValue, node) || {};
+            let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parentVm, parsedValue.substr(1), operator + name, parsedValue, node) || {};
             if (propertyName === undefined) return null; // wasn't able to parse binding, so stop. maybe dependencyTree will pick it up later
 
             let bindingValue: IComputedValue<boolean> = computed((): boolean => !scope[<string>propertyName]);
@@ -205,12 +202,12 @@ export class BindingEngine {
         else if (parsedValue.indexOf('+') > 0) { // simple concatenation
             let elements: string[] = parsedValue.split('+');
             elements = elements.map(item => item.trim());
-            let stringRegex: RegExp = /^'([\w#/\s()]+)'$/gm;
+            let stringRegex: RegExp = /^'([\w#/\s():]+)'$/gm;
 
             let allBindingsParsed = true;
             for (let i = 0; i < elements.length; i++) {
                 if (!elements[i].match(stringRegex)) {
-                    let { propertyName } = this.resolveScopeAndCreateDependencyTree(vm, elements[i], operator + name, parsedValue, node) || {};
+                    let { propertyName } = this.resolveScopeAndCreateDependencyTree(vm, parentVm, elements[i], operator + name, parsedValue, node) || {};
                     if (propertyName === undefined) {
                         allBindingsParsed = false;
                         continue; // wasn't able to parse binding. maybe dependencyTree will pick it up later
@@ -228,7 +225,7 @@ export class BindingEngine {
                         concatenatedString += stringRegex.exec(elements[i])![1];
                     }
                     else {
-                        let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, elements[i], operator + name, parsedValue, node)!;
+                        let { propertyName, scope } = this.resolveScopeAndCreateDependencyTree(vm, parentVm, elements[i], operator + name, parsedValue, node)!;
 
                         if (propertyName in scope) {
                             concatenatedString += scope[propertyName];
@@ -243,28 +240,43 @@ export class BindingEngine {
             bindingProperties.bindingValue = bindingValue;
         }
 
-
-        /* event-bindings should be run in their original scope. even if the binding comes from a different scope.
-         * for instance a foreach loop containing a click binding to app.clickHandler should (upon click) execute clickHandler
-         * FROM the app-scope, but execute it IN the foreach scope.
-         * Not at all pleased with this exception to the rule. TODO: Make this a general case
-         */
-        if (bindingProperties.handler == '__event') {
-            bindingProperties.scope = vm;
-        }
-
-        //console.log(bindingProperties);
         return bindingProperties;
     }
 
-    private resolveScopeAndCreateDependencyTree(scope: any, namespace: string, originalName: string, originalValue: string, originalElement: HTMLElement): { propertyName: string, scope: any } | null {
+    getBindingValueFromProperty(propertyName: string, viewmodel: any, parentViewmodel: any): any {
+        if (/^'\w+'$/gm.test(propertyName)) { // string value ('someText')
+            return propertyName.substring(1, propertyName.length - 1);
+        }
+        else if (propertyName === 'this') {
+            return viewmodel;
+        }
+        else if (propertyName === 'super' && parentViewmodel) {
+            return parentViewmodel;
+        }
+        else if (viewmodel instanceof Object && propertyName in viewmodel) { // viewmodel is an object / viewmodel and value is a property on object / viewmodel
+            if (isObservableArray(viewmodel[propertyName])) { // value is an observable array property
+                return viewmodel[propertyName];
+            }
+            if (isObservableProp(viewmodel, propertyName)) { // value is an observable property
+                return getAtom(viewmodel, propertyName);
+            }
+            else if (typeof viewmodel[propertyName] === 'function') { // value is a method on scope
+                return viewmodel[propertyName];
+            }
+            else { // non-observable property on scope
+                return viewmodel[propertyName];
+            }
+        }
+    }
+
+    private resolveScopeAndCreateDependencyTree(scope: any, parentScope: any, namespace: string, originalName: string, originalValue: string, originalElement: HTMLElement): { propertyName: string, scope: any, isAbsoluteScope: boolean } | null {
         let dependencyTree: { vm: any, property: string }[] = [];
-        let finalScope: { propertyName: string, scope: any } | null = this.recursiveResolveScope(scope, namespace, dependencyTree);
+        let finalScope: { propertyName: string, scope: any, isAbsoluteScope: boolean } | null = this.recursiveResolveScope(scope, parentScope, namespace, dependencyTree);
 
         /* build the dependency tree */
         if (dependencyTree.length > 0) {
-            let disposers: Lambda[] = []; /* will the array of disposers be disposed itself? */
-            let storedChildElements: DocumentFragment = document.createDocumentFragment();  /* remove and store all child elements if the binding failed. If retrying, we add them back in, but for now just assume this whole tree to be corrupted */
+            const disposers: Lambda[] = []; /* will the array of disposers be disposed itself? */
+            const storedChildElements: DocumentFragment = document.createDocumentFragment();  /* remove and store all child elements if the binding failed. If retrying, we add them back in, but for now just assume this whole tree to be corrupted */
 
             if (finalScope == null && originalElement.childNodes.length > 0) { /* binding failed. save and remove the childelements */
                 while (originalElement.childNodes.length > 0) {
@@ -272,47 +284,104 @@ export class BindingEngine {
                 }
             }
 
+            const changeFunction = (_change: IValueDidChange<unknown> | IObjectDidChange): void => {
+                //console.log('DEPENDENCY TREE TRIGGERED FOR', treeNode, change.newValue === change.oldValue, originalName);
+                /* somewhere in the observed path a node is changed
+                 * dispose of all listeners and (try to) rebind the whole path to it's original binding
+                 */
+                for (let dispose of disposers) {
+                    dispose();
+                }
+
+                /* restore the original DOM structure */
+                while (storedChildElements.childNodes.length > 0) {
+                    const nodeToRestore = storedChildElements.childNodes[0];
+                    originalElement.appendChild(nodeToRestore);
+                }
+
+                const controlsChildren: boolean = this.rebind(originalName, originalValue, scope, parentScope, originalElement);
+
+                /* if we restored the stored child elements, we need te bind them, unless the originalelement binding
+                 * controls the child elements (@if binding, etc)
+                 */
+                if (!controlsChildren) {
+                    for (let i = 0; i < originalElement.childNodes.length; i++) {
+                        const nodeToBind: ChildNode = originalElement.childNodes[i];
+                        bindWithParent(scope, parentScope, nodeToBind);
+                    }
+                }
+            };
+
             for (let treeNode of dependencyTree) {
-                let disposer: Lambda = observe(treeNode.vm, treeNode.property, (): void => {
-                    /* somewhere in the observed path a node is changed
-                     * dispose of all listeners and (try to) rebind the whole path to it's original binding
-                     */
-                    for (let dispose of disposers) {
-                        dispose();
-                    }
+                let disposer: Lambda | undefined;
 
-                    /* restore the original DOM structure and try to bind again */
-                    while (storedChildElements.childNodes.length > 0) {
-                        const nodeToRestore = storedChildElements.childNodes[0];
+                if (isObservableProp(treeNode.vm, treeNode.property)) {
+                    disposer = observe(treeNode.vm, treeNode.property, changeFunction);
+                }
+                /* Fix for a very very fringy case: where somewhere in the dependency tree a property is not really a native property
+                 * but mapped through a getter or proxy or decorator to another class and we get just the ObservableValue back
+                 */
+                else if (isObservable(treeNode.property)) {
+                    disposer = observe(treeNode.property, changeFunction);
+                }
+                /* END FIX */
 
-                        originalElement.appendChild(nodeToRestore);
-                        /* these restored, fresh elements are plain html without any prior bindings, so they must be bound (not re-bound) */
-                        bind(scope, <HTMLElement>nodeToRestore);
-                    }
-
-                    this.rebind(originalName, originalValue, scope, originalElement);
-                });
-
-                disposers.push(disposer);
+                if (disposer) {
+                    disposers.push(disposer);
+                }
             }
+        }
+        else if (finalScope == null) { // binding failed and there is no dependency tree.. It will probably never resolve, so just throw the children away
+            originalElement.innerHTML = '';
         }
 
         return finalScope;
     }
 
-    private recursiveResolveScope(currentScope: any, namespace: string, dependencyTree: { vm: any, property: string }[]): { propertyName: string, scope: any } | null {
+    /* Named scopes and paths starting from a named scope are absolute. They are not relative to the current viewmodel.
+     * This is important for templates, since bindings that are relative to the current instance of a template cannot 
+     * be cached.
+     */
+    private recursiveResolveScope(currentScope: any, parentScope: any, namespace: string, dependencyTree: { vm: any, property: string }[]): { propertyName: string, scope: any, isAbsoluteScope: boolean } | null {
+        /* Fix for a very very fringy case: where somewhere in the dependency tree a property is not really a native property
+         * but mapped through a getter or proxy or decorator to another class and we get just the ObservableValue back
+         */
+        if (currentScope?.constructor.name === 'ObservableValue') {
+            currentScope = currentScope.get();
+        }
+        /* END FIX */
+
         let levels: string[] = namespace.split('.');
         let scope: any = currentScope;
+        let isAbsoluteScope: boolean = false;
 
         switch (levels.length) {
             case 1: // current level, no namespace
-                if (levels[0] === 'this' || levels[0] in currentScope) {
-                    return { propertyName: levels[0], scope: scope };
+                if (/^'\w+'$/gm.test(levels[0]) || // string value ('someText')
+                    levels[0] === 'this' ||
+                    levels[0] in currentScope) {
+                    return { propertyName: levels[0], scope, isAbsoluteScope };
                 }
-                return null; // wasn't able to parse binding, but don't throw yet: maybe it's a string binding
+                else if (levels[0] === 'super') {
+                    return { propertyName: 'super', scope: parentScope, isAbsoluteScope };
+                }
+
+                throw (`[Imagine] cannot parse property: ${levels[0]}`);
             case 2: // one level of namespacing
+                /* Check scope */
                 if (this.scopes.has(levels[0])) {
+                    isAbsoluteScope = true;
                     scope = this.scopes.get(levels[0]);
+                }
+                else if (typeof currentScope !== 'object' && typeof currentScope !== 'undefined' && currentScope !== null) {
+                    throw (`[Imagine] scope: ${currentScope} is not an object, but a ${typeof currentScope}, when resolving ${namespace}`);
+                }
+                else if (typeof currentScope === 'undefined' || currentScope === null || Object.keys(toJS(scope)).length === 0) {
+                    return null; // stop binding, but do keep the dependencyTree, maybe it will resolve later
+                }
+                else if (levels[0] === 'super') {
+                    // dependencyTree.push({ vm: ??, property: ?? }); //no dependencies on super
+                    scope = parentScope;
                 }
                 else if (levels[0] in currentScope) {
                     dependencyTree.push({ vm: currentScope, property: levels[0] });
@@ -321,15 +390,36 @@ export class BindingEngine {
                 else {
                     throw (`[Imagine] undefined scope: ${levels[0]}`);
                 }
+
+                /* Check final level on scope */
+
+                /* Fix for a very very fringy case: where somewhere in the dependency tree a property is not really a native property
+                 * but mapped through a getter or proxy or decorator to another class and we get just the ObservableValue back
+                 */
+                if (scope?.constructor.name === 'ObservableValue') {
+                    scope = scope.get();
+                }
+                /* END FIX */
 
                 if (scope && levels[1] in scope) {
-                    return { propertyName: levels[1], scope: scope };
+                    return { propertyName: levels[1], scope: scope, isAbsoluteScope };
                 }
 
-                return null; // wasn't able to parse binding, but don't throw yet: maybe the dependencyTree will get it to work in a future update of the viewmodel...
+                return null; // final level wasn't found on scope, but don't throw: maybe the dependencyTree will get it to work in a future update of the scope/viewmodel...
             default: // more levels, parse the lowest and go into recursion
                 if (this.scopes.has(levels[0])) {
+                    isAbsoluteScope = true;
                     scope = this.scopes.get(levels[0]);
+                }
+                else if (typeof currentScope !== 'object' && typeof currentScope !== 'undefined' && currentScope !== null) {
+                    throw (`[Imagine] scope: ${currentScope} is not an object, but a ${typeof currentScope}, when resolving ${namespace}`);
+                }
+                else if (typeof currentScope === 'undefined' || currentScope === null || Object.keys(toJS(scope)).length === 0) {
+                    return null; // stop binding, but do keep the dependencyTree, maybe it will resolve later
+                }
+                else if (levels[0] === 'super') {
+                    // dependencyTree.push({ vm: ??, property: ?? }); //no dependencies on super
+                    scope = parentScope;
                 }
                 else if (levels[0] in currentScope) {
                     dependencyTree.push({ vm: currentScope, property: levels[0] });
@@ -339,7 +429,7 @@ export class BindingEngine {
                     throw (`[Imagine] undefined scope: ${levels[0]}`);
                 }
 
-                return this.recursiveResolveScope(scope, levels.slice(1).join('.'), dependencyTree);
+                return this.recursiveResolveScope(scope, parentScope, levels.slice(1).join('.'), dependencyTree);
         }
     }
 
@@ -355,9 +445,9 @@ export class BindingEngine {
                 contextsToIterateOver.push(context);
             });
 
-            for(let context of contextsToIterateOver) {
+            for (let context of contextsToIterateOver) {
                 if (context.originalKey && context.originalValue) { // I believe only template-context created in 'bind' don't fill this requirement, but I can't remember what that context is for in the first place
-                    childrenAreUnderControl = this.rebind(context.originalKey, context.originalValue, vm, element) || childrenAreUnderControl;
+                    childrenAreUnderControl = this.rebind(context.originalKey, context.originalValue, vm, context.parentVm, element) || childrenAreUnderControl;
                 }
             }
         }
@@ -372,9 +462,11 @@ export class BindingEngine {
     /**
      * @returns true if child nodes were updated during rebind, false otherwise
      */
-    private rebind(originalName: string, originalValue: string, originalVM: any, originalElement: HTMLElement): boolean {
-        let newBindingProperties = this.parseBinding(originalName, originalValue, originalElement, originalVM);
+    private rebind(originalName: string, originalValue: string, originalVM: any, originalParent: any, originalElement: HTMLElement): boolean {
+        let newBindingProperties: BindingProperties | null | undefined = this.parseBinding(originalName, originalValue, originalElement, originalVM, originalParent);
         let oldBindingContextTemplate: any;
+        let oldCachedBindings: any;
+        let bindingControlsChildren: boolean = false;
 
         if (newBindingProperties) {
             /* clean up existing context */
@@ -384,6 +476,7 @@ export class BindingEngine {
 
                 if (contextsForElement.has(contextIdentifier)) {
                     oldBindingContextTemplate = contextsForElement.get(contextIdentifier)?.template; // Save a template if there was one... For 'if' and 'foreach' bindings that loose their template otherwise...
+                    oldCachedBindings = contextsForElement.get(contextIdentifier)?.cachedBindings; // And the cached bindings that go with it, if any
                     contextsForElement.delete(contextIdentifier);
                 }
             }
@@ -392,29 +485,22 @@ export class BindingEngine {
             const newContext: BindingContext = this.bindInitPhase(newBindingProperties, true);
             newContext.originalKey = originalName;
             newContext.originalValue = originalValue;
+            newContext.parentVm = originalParent;
+            bindingControlsChildren = bindingControlsChildren || newContext.controlsChildren; // in case EITHER of the bindings (in case of transform) controls it's children
 
             /* restore template if there was one before */
             if (oldBindingContextTemplate !== undefined) {
                 newContext.template = oldBindingContextTemplate;
+            }
+            if (oldCachedBindings !== undefined) {
+                newContext.cachedBindings = oldCachedBindings;
             }
 
             /* rebind update phase */
             this.bindUpdatePhase(newBindingProperties);
         }
 
-        /* hardcoded which handlers have their child elements under control.
-         * temporary solution. Better solution: have the handlers return wether or not
-         * they control their children after the Init phase
-         */
-        if (newBindingProperties?.handler === 'foreach' ||
-            newBindingProperties?.handler === 'if' ||
-            newBindingProperties?.handler === 'html' ||
-            newBindingProperties?.handler === 'content' ||
-            newBindingProperties?.handler === 'context') {
-                return true;
-            }
-
-            return false;
+        return bindingControlsChildren;
     }
 
     /**
@@ -422,6 +508,7 @@ export class BindingEngine {
      */
     bindInitPhase = (bindingProperties: BindingProperties, rebind: boolean = false): BindingContext => {
         const currentHandler: BindingHandler = BindingEngine.handlers[bindingProperties.handler];
+
         let contextsForElement: Map<string, BindingContext>;
 
         /* if no context list exists yet for this element, create it */
@@ -446,20 +533,59 @@ export class BindingEngine {
 
             contextsForElement.set(contextIdentifier, context);
 
-            currentHandler.init?.call(this, bindingProperties.element, this.unwrap(bindingProperties.bindingValue), context, (value: any): void => { // for event bindings this updateFunction should not be provided
+            let handlerControlsChildren = currentHandler.init?.call(this, bindingProperties.element, this.unwrap(bindingProperties.bindingValue), context, (value: any): void => { // for event bindings this updateFunction should not be provided
                 if (bindingProperties.propertyName !== 'this') {
-                    context.preventCircularUpdate = true;
+                    //console.log('------ PREVENT CIRCULAR UPDATE FOR', bindingProperties.propertyName)
+                    context.preventCircularUpdateIn = true;
+
                     if (isObservableArray(bindingProperties.bindingValue)) {
+                        if (!Array.isArray(value)) {
+                            throw new Error(`Cannot pass single value to observable array '${bindingProperties.propertyName}'`);
+                        }
+
                         bindingProperties.scope[bindingProperties.propertyName] = value;
                     }
                     else if (isObservable(bindingProperties.bindingValue)) {
-                        bindingProperties.bindingValue.set(value);
+                        /* if at binding time the property was not instantiated (undefined), it was assumed that it would be
+                         * a normal observable property and bindingvalue was set to getAtom(scope, propertyname)
+                         * if at first instantiation an array is passed, this assumption turns out to be wrong. So fix it here
+                         * ONLY ALLOW THIS IF THE PROPERTY IS STILL UNDEFINED, WE DON'T WANT RANDOM OBSERVABLE TYPE SWITCHING!
+                         */
+                        if (bindingProperties.bindingValue.get() === undefined && Array.isArray(value)) {
+                            /* Remove the current listeners on the observable, set it to the array
+                             * and then rebind the update-phase as an array
+                             */
+                            bindingProperties.bindingValue.changeListeners = []; /* hackery to de-register our listeners, without keeping track of the disposers. Don't know if this has (memory-leak) side-effects */
+                            bindingProperties.scope[bindingProperties.propertyName] = value;
+                            bindingProperties.bindingValue = bindingProperties.scope[bindingProperties.propertyName];
+                            this.bindUpdatePhase(bindingProperties);
+                        }
+                        else if (Array.isArray(value)) {
+                            throw new Error(`Cannot pass array to regular observable '${bindingProperties.propertyName}'`);
+                        }
+                        else {
+                            /* If value hasn't changed, observers will not be called by MobX.
+                             * this is of course correct behaviour. However, it prevents the reset
+                             * of the CircularUpdatePrevention and that gets stuck in Prevent-mode
+                             * So manually reset it, if no changes are propagated
+                             */
+                            if (bindingProperties.bindingValue.get() === value) {
+                                context.preventCircularUpdateIn = false;
+                            }
+                            else {
+                                bindingProperties.bindingValue.set(value);
+                            }
+                        }
                     }
                     else {
                         bindingProperties.bindingValue = value;
                     }
                 }
             });
+
+            if (handlerControlsChildren) {
+                context.controlsChildren = true;
+            }
 
             return context;
         }
@@ -477,29 +603,36 @@ export class BindingEngine {
             return;
         }
 
-        const updateFunction = (change?: IValueDidChange<any> | IObjectDidChange) => {
+        const updateFunction = (a: string, change?: IValueDidChange<any> | IObjectDidChange) => {
+            if (change && 'name' in change) { // MobX's observe also fires when sub-properties are changed, but we don't want to respond to that here
+                //console.log('REJECTED CHANGE', change, context.propertyName)
+                return;
+            }
+
             let propertyValue: any = this.unwrap(bindingProperties.bindingValue);
 
-            if (!context.preventCircularUpdate) {
+            //console.log('UPDATE PHASE START', context.preventCircularUpdateIn, change)
+            if (!context.preventCircularUpdateIn) {
+                context.preventCircularUpdate = true;
                 currentHandler.update!(bindingProperties.element, propertyValue, context, change);
             }
 
-            context.preventCircularUpdate = false;
+            context.preventCircularUpdateIn = false;
         };
 
         if (isObservable(bindingProperties.bindingValue)) {
             if (isObservableArray(bindingProperties.bindingValue)) { /* not only observe the array contents, but also replacing the array */
                 observe(context.vm, bindingProperties.propertyName, (change: IValueDidChange<any>): void => {
                     bindingProperties.bindingValue = change.newValue;
-                    observe(bindingProperties.bindingValue, updateFunction); /* observe the content of the new array */
-                    updateFunction(change);
+                    observe(bindingProperties.bindingValue, (c) => { updateFunction('from array ' + bindingProperties.propertyName, c) }); /* observe the content of the new array */
+                    updateFunction('array swapped', change);
                 });
             }
 
-            observe(bindingProperties.bindingValue, updateFunction); /* primitives, objects and content of arrays */
+            observe(bindingProperties.bindingValue, (c) => { updateFunction('from value of ' + bindingProperties.propertyName, c) }); /* primitives, objects and content of arrays */
         }
 
-        updateFunction();
+        updateFunction('immediate');
     }
 
     getTransformFor = (element: HTMLElement, target: string): Function | { read: Function, write: Function } | null => {
@@ -543,7 +676,8 @@ export interface BindingProperties {
     scope: any,
     vm: any,
     bindingValue: any,
-    element: HTMLElement
+    element: HTMLElement,
+    isCacheable: boolean
 }
 
 
@@ -557,8 +691,6 @@ BindingEngine.handlers['html'] = new HtmlHandler();
 BindingEngine.handlers['visible'] = new VisibleHandler();
 BindingEngine.handlers['content'] = new ContentHandler();
 BindingEngine.handlers['component'] = new ComponentHandler();
-
-BindingEngine.handlers['transform'] = new TransformHandler();
 
 BindingEngine.handlers['__attribute'] = new AttributeHandler();
 BindingEngine.handlers['__property'] = new PropertyHandler();

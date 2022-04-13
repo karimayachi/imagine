@@ -2,7 +2,6 @@ import { BindingHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { IArraySplice, observable, extendObservable } from 'mobx';
 import { PROPERTY_SETTER_SYMBOL } from '../imagine';
-import { bindingEngine } from '../index';
 
 export class PropertyHandler implements BindingHandler {
     init(element: HTMLElement, value: any, context: BindingContext, updateValue: (value: any) => void): void {
@@ -10,7 +9,6 @@ export class PropertyHandler implements BindingHandler {
             let propertyName: string = context.parameter!;
 
             let caseSensitiveDescriptor: { descriptor: PropertyDescriptor, caseSensitiveName: string } | null = getPropertyDescriptorFromPrototypeChain(element, propertyName);
-            //console.log('----- INIT PROPERTY', propertyName, context)
             if (caseSensitiveDescriptor) { // configure existing property
                 if (typeof caseSensitiveDescriptor.descriptor.value === 'function') {
                     /* CASE 1: The WebComponent exposes a function.
@@ -53,8 +51,6 @@ export class PropertyHandler implements BindingHandler {
                     let dummyObservableValue: any = observable.box();
                     let realValue: any;
                     let newProperties: object = {};
-                    // let transform = <{ read: Function, write: Function } | Function | null>bindingEngine.getTransformFor(element, 'property.' + propertyName);
-                    /* CHECK FOR TRANSFORM ONLY ON CREATION OF THE PROPERTY.. IS THIS ENOUGH? */
 
                     Object.defineProperty(newProperties, propertyName, {
                         enumerable: true,
@@ -64,26 +60,12 @@ export class PropertyHandler implements BindingHandler {
                             return realValue; // don't return the observable value however, becauses in case of a plain object it gets wrapped by mobx (proxied) and we want the original value, not the proxy
                         },
                         set: (value: any): void => {
-                            // if (transform && (<{ read: Function }>transform).read && typeof (<{ read: Function }>transform).read === 'function') {
-                            //     closureValue.set((<{ read: Function }>transform).read(value));
-                            // }
-                            // else if (transform && typeof transform === 'function') {
-                            //     closureValue.set(transform(value));
-                            // }
-                            // else {
-                                dummyObservableValue.set(value); // just to trigger tracking
-                                realValue = value; // store unwrapped original
-                            // }
+                            dummyObservableValue.set(value); // just to trigger tracking
+                            realValue = value; // store unwrapped original
 
                             if (!context.preventCircularUpdate) {
                                 context.preventCircularUpdate = true;
-
-                                // if (transform && (<{ write: Function }>transform).write) {
-                                //     updateValue((<{ write: Function }>transform).write(value));
-                                // }
-                                // else {
-                                    updateValue(value);
-                                // }
+                                updateValue(value);
                             }
                             context.preventCircularUpdate = false;
                         }
@@ -96,8 +78,7 @@ export class PropertyHandler implements BindingHandler {
     }
 
     update(element: HTMLElement, value: string, context: BindingContext, change: IArraySplice<any>): void {
-        //console.log(element, value, context)
-        if(context.parameter) {
+        if (context.parameter) {
             setTimeout(() => { // Move update to back of callstack, so Custom Element is initialized first -- TODO MOVE THIS LOGIC TO BINDING ENGINE, MAYBE USE customElements.get to check
                 context.preventCircularUpdate = true;
                 (<any>element)[context.parameter!] = value;
@@ -121,39 +102,21 @@ function bindProperties(caseSensitiveDescriptor: { descriptor: PropertyDescripto
         originalSetter = caseSensitiveDescriptor!.descriptor!.set;
     }
 
-    // let transform = <{ read: Function, write: Function } | Function | null>bindingEngine.getTransformFor(element, 'property.' + caseSensitiveDescriptor!.caseSensitiveName!);
-    /* CHECK FOR TRANSFORM ONLY ON BINDING OF THE PROPERTY.. IS THIS ENOUGH? */
-
     Object.defineProperty(element, caseSensitiveDescriptor.caseSensitiveName, {
         enumerable: caseSensitiveDescriptor.descriptor.enumerable || false,
         configurable: true, // Whatever the original was, we need to be able to change this property from now on
         get: caseSensitiveDescriptor!.descriptor.get,
         set: (value: any): void => {
             if (originalSetter) {
-                // if (transform && (<{ read: Function }>transform).read && typeof (<{ read: Function }>transform).read === 'function') {
-                //     originalSetter.call(element, (<{ read: Function }>transform).read(value));
-                // }
-                // else if (transform && typeof transform === 'function') {
-                //     originalSetter.call(element, transform(value));
-                // }
-                // else {
-                    //console.log('CALL ORIGINAL SETTER', value)
-                    originalSetter.call(element, value);
-                // }
+                originalSetter.call(element, value);
             }
 
             //console.log('UPDATE PROP:', !context.preventCircularUpdate)
             if (!context.preventCircularUpdate) {
-                // if (transform && (<{ write: Function }>transform).write) {
-                //     updateValue((<{ write: Function }>transform).write(value));
-                // }
-                // else {
-                    updateValue(value);
-                // }
+                updateValue(value);
             }
 
             context.preventCircularUpdate = false;
-            //console.log('FINISHED')
         }
     });
 

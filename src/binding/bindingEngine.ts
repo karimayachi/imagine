@@ -3,7 +3,6 @@ import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler
 import { BindingContext } from './bindingContext';
 import { PropertyHandler } from './propertyBinding';
 import { bindWithParent } from '../index';
-import { isObservableValue } from 'mobx/lib/internal';
 
 interface BindingHandlers {
     [key: string]: BindingHandler
@@ -692,8 +691,6 @@ BindingEngine.handlers['html'] = new HtmlHandler();
 BindingEngine.handlers['visible'] = new VisibleHandler();
 BindingEngine.handlers['content'] = new ContentHandler();
 BindingEngine.handlers['component'] = new ComponentHandler();
-
-// BindingEngine.handlers['transform'] = new TransformHandler();
 
 BindingEngine.handlers['__attribute'] = new AttributeHandler();
 BindingEngine.handlers['__property'] = new PropertyHandler();

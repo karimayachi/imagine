@@ -39,39 +39,6 @@ export class Imagine {
         this.recursiveBindNodes(element, vm, parentVm);
     }
 
-    // private recursiveBindNodes(rootNode: Node, vm: any) {
-    //     /* first preserve the child structure before the binding */
-    //     let children: Node[] = [];
-    //     for (let index = 0; index < rootNode.childNodes.length; index++) {
-    //         children.push(rootNode.childNodes[index]);
-    //     }
-    //     let someBindingControlsChildren: boolean = false;
-
-    //     if (rootNode.nodeType === 1) {
-    //         if ((<HTMLElement>rootNode).tagName === 'IMAGINE-TRANSFORM') {
-    //             this.bindDirectives(<HTMLElement>rootNode, vm);
-    //         }
-    //         else {
-    //             someBindingControlsChildren = this.bindAttributes(<HTMLElement>rootNode, vm);
-    //         }
-    //     }
-
-    //     if (rootNode.nodeType === 3) {
-    //         this.bindInlinedText(<HTMLElement>rootNode, vm);
-    //     }
-
-    //     /* compare children with preserved list. Don't bind the children that were added by the binding 
-    //      * and also don't bind the preserved children that were removed by the binding
-    //      */
-    //     if (rootNode.childNodes.length > 0) {
-    //         for (let index = rootNode.childNodes.length - 1; index >= 0; index--) {
-    //             if (children.indexOf(rootNode.childNodes[index]) > -1) {
-    //                 this.recursiveBindNodes(rootNode.childNodes[index], vm);
-    //             }
-    //         }
-    //     }
-    // }
-
     /**
      * Used in template-bindings (e.g. foreach) once (with the first item being bound)
      * to evaluate and cache all bindings in the template and update the stored
@@ -331,37 +298,6 @@ export class Imagine {
         parsedAttribute.parameter = node.getAttribute('TARGET') || ''; /* only TARGET is implemented.. NAME would be the other option */
         this.bindingEngine.bindInitPhase(parsedAttribute);
     }
-
-    // private bindInlinedText(node: HTMLElement, vm: any): Node[] | undefined {
-    //     let templateLiteralRegEx: RegExp = /\${[a-zA-Z.()\s?:']*}/gm;
-    //     if (templateLiteralRegEx.test(node.textContent!)) {
-    //         let stringParts: string[] = node.textContent!.split(templateLiteralRegEx);
-    //         let matches: RegExpMatchArray | null = node.textContent!.match(templateLiteralRegEx);
-    //         let newNodeList: Node[] = [];
-
-    //         for (let i = 0; i < stringParts.length; i++) {
-    //             if (stringParts[i].length > 0) {
-    //                 newNodeList.push(document.createTextNode(stringParts[i]));
-    //             }
-
-    //             let boundElement: HTMLSpanElement = document.createElement('span');
-    //             if (matches![i]) {
-    //                 let parsedNode = this.bindingEngine.parseBinding('@text', matches![i].substring(2, matches![i].length - 1), boundElement, vm);
-    //                 if (parsedNode) {
-    //                     parsedNode.element = boundElement;
-    //                     this.bindingEngine.bindInitPhase(parsedNode);
-    //                     this.bindingEngine.bindUpdatePhase(parsedNode);
-    //                 }
-
-    //                 newNodeList.push(boundElement); // even if not bound keep it as a span in DOM. maybe the dependency tree will bind it later
-    //             }
-    //         }
-
-    //         node.replaceWith(...newNodeList);
-
-    //         return newNodeList;
-    //     }
-    // }
 
     private convertInlineBindings(node: HTMLElement): void {
         let templateLiteralRegEx: RegExp = /\${[a-zA-Z.()\s?:']*}/gm;

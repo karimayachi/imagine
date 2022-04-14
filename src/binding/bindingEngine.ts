@@ -181,9 +181,12 @@ export class BindingEngine {
             const bindingValue: IComputedValue<boolean> = typeof transformFunction === 'function'
                 ? computed((): any => (<Function>transformFunction)(this.unwrap(binding)))
                 : computed((): any => (<{ read: Function }>transformFunction).read(this.unwrap(binding)),
-                    (value: any): void => {
-                        binding.set((<{ write: Function }>transformFunction).write(value));
-                    });
+                    {
+                        set: (value: any): void => {
+                            binding.set((<{ write: Function }>transformFunction).write(value));
+                        }
+                    }
+                );
 
             bindingProperties.propertyName = propertyName;
             bindingProperties.bindingValue = bindingValue;

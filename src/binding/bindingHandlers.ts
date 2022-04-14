@@ -1,6 +1,6 @@
 import { BindingContext } from './bindingContext';
 import { bind, scopes, bindingEngine, recursiveBindAndCache, finalizeCachedBinding, contexts, bindWithParent } from '../index';
-import { IArraySplice, observe, observable, IArrayChange, IObservableArray } from 'mobx';
+import { IArraySplice, observe, observable, IObservableArray, IArrayUpdate } from 'mobx';
 import { BindingProperties } from './bindingEngine';
 
 export abstract class BindingHandler {
@@ -189,7 +189,7 @@ export class ForEachHandler implements BindingHandler {
         return true; // this binding controls its own children
     }
 
-    update(element: HTMLElement & { selecteditems: any[], selecteditem: any }, value: any, context: BindingContext, change: IArraySplice<any> | IArrayChange): void {
+    update(element: HTMLElement & { selecteditems: any[], selecteditem: any }, value: any, context: BindingContext, change: IArraySplice<any> | IArrayUpdate): void {
         if (!context.template) return;
 
         const addedWebComponents: { webcomponents: ChildNode[] | null, item: any }[] = [];

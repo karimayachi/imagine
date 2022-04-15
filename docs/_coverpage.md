@@ -1,6 +1,6 @@
 ![logo](img/imagine.svg ':size=25%')
 
-> MVVM for the Web reimagined
+> MVVM for the web reimagined
 
 - 100% declarative
 - Use Composition alongside MVVM

@@ -12,6 +12,10 @@ npm install imagine mobx
 
 ... would be the way, but it's not public on npm yet :-)
 
+## Documentation
+
+Documentation (under construction) can be found here: [Documentation](https://imagine.js.org)
+
 ## License
 Copyright 2022, Karim Ayachi
 

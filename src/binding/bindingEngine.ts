@@ -296,21 +296,28 @@ export class BindingEngine {
                     dispose();
                 }
 
-                /* restore the original DOM structure */
-                while (storedChildElements.childNodes.length > 0) {
-                    const nodeToRestore = storedChildElements.childNodes[0];
-                    originalElement.appendChild(nodeToRestore);
-                }
-
-                const controlsChildren: boolean = this.rebind(originalName, originalValue, scope, parentScope, originalElement);
-
-                /* if we restored the stored child elements, we need te bind them, unless the originalelement binding
-                 * controls the child elements (@if binding, etc)
+                /* it can be that the original element doesn't exist anymore (because this something in this dependency tree or
+                 * something else was used in a child controlling binding). If it doesn't exist anymore, don't create new
+                 * bindings (with a new observed dependency tree). Just let this branch die. It can be reintroduced by the
+                 * other binding later).
                  */
-                if (!controlsChildren) {
-                    for (let i = 0; i < originalElement.childNodes.length; i++) {
-                        const nodeToBind: ChildNode = originalElement.childNodes[i];
-                        bindWithParent(scope, parentScope, nodeToBind);
+                if (document.body.contains(originalElement)) {
+                    /* restore the original DOM structure */
+                    while (storedChildElements.childNodes.length > 0) {
+                        const nodeToRestore = storedChildElements.childNodes[0];
+                        originalElement.appendChild(nodeToRestore);
+                    }
+
+                    const controlsChildren: boolean = this.rebind(originalName, originalValue, scope, parentScope, originalElement);
+
+                    /* if we restored the stored child elements, we need te bind them, unless the originalelement binding
+                     * controls the child elements (@if binding, etc)
+                     */
+                    if (!controlsChildren) {
+                        for (let i = 0; i < originalElement.childNodes.length; i++) {
+                            const nodeToBind: ChildNode = originalElement.childNodes[i];
+                            bindWithParent(scope, parentScope, nodeToBind);
+                        }
                     }
                 }
             };

@@ -543,7 +543,7 @@ export class BindingEngine {
 
             contextsForElement.set(contextIdentifier, context);
 
-            let handlerControlsChildren = currentHandler.init?.call(this, bindingProperties.element, this.unwrap(bindingProperties.bindingValue), context, (value: any): void => { // for event bindings this updateFunction should not be provided
+            let handlerControlsChildren = currentHandler.init?.call(this, bindingProperties.element, this.unwrap(bindingProperties.bindingValue), context, (value: any): any => { // for event bindings this updateFunction should not be provided
                 if (bindingProperties.propertyName !== 'this') {
                     //console.log('------ PREVENT CIRCULAR UPDATE FOR', bindingProperties.propertyName)
                     context.preventCircularUpdateIn = true;
@@ -590,6 +590,8 @@ export class BindingEngine {
                     else {
                         bindingProperties.bindingValue = value;
                     }
+
+                    return this.unwrap(bindingProperties.bindingValue); // value can be manipulated by computeds, setters, etc.. So return the final value, maybe it's useful
                 }
             });
 

@@ -65,8 +65,9 @@ export class PropertyHandler implements BindingHandler {
 
                             if (!context.preventCircularUpdate) {
                                 context.preventCircularUpdate = true;
-                                updateValue(value);
+                                realValue = updateValue(value); // update original if manipulated by updateValue (in computed of setter, etc)
                             }
+
                             context.preventCircularUpdate = false;
                         }
                     });
@@ -87,7 +88,7 @@ export class PropertyHandler implements BindingHandler {
     }
 }
 
-function bindProperties(caseSensitiveDescriptor: { descriptor: PropertyDescriptor, caseSensitiveName: string }, element: HTMLElement, context: BindingContext, updateValue: (value: any) => void) {
+function bindProperties(caseSensitiveDescriptor: { descriptor: PropertyDescriptor, caseSensitiveName: string }, element: HTMLElement, context: BindingContext, updateValue: (value: any) => any) {
     /* Check to see if we have bound this property before: the setter should than have
      * a PROPERTY_SETTER_SYMBOL property containing the original setter
      */
@@ -107,13 +108,15 @@ function bindProperties(caseSensitiveDescriptor: { descriptor: PropertyDescripto
         configurable: true, // Whatever the original was, we need to be able to change this property from now on
         get: caseSensitiveDescriptor!.descriptor.get,
         set: (value: any): void => {
-            if (originalSetter) {
-                originalSetter.call(element, value);
+            //console.log('UPDATE PROP:', !context.preventCircularUpdate)
+            let finalValue: any = value; 
+            if (!context.preventCircularUpdate) {
+                finalValue = updateValue(value); // value can be manipulated during updateValue() --e.g. by computeds or setters
             }
 
-            //console.log('UPDATE PROP:', !context.preventCircularUpdate)
-            if (!context.preventCircularUpdate) {
-                updateValue(value);
+            // TODO: find a way to prevent circular update if this setter is called from WITHIN the Web Component. maybe with proxy? find if the caller is within element
+            if (originalSetter) {
+                originalSetter.call(element, finalValue); // use the same FINAL value as is resulted from updating the observable in the original W.C. setter
             }
 
             context.preventCircularUpdate = false;

@@ -7,11 +7,9 @@ MVVM for the Web reimagined. Declarative two-bindings that work with plain HTML 
 ## Quickstart
 
 ```shell
-npm install imagine mobx
+npm install imagine-lib mobx
 ```
-
-... would be the way, but it's not public on npm yet :-)
-
+`imagine`, `imaginejs` and `imagine-js` were already taken... Let's reconsider this name :-(
 ## Documentation
 
 Documentation (under construction) can be found here: [Documentation](https://imagine.js.org)

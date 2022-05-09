@@ -1,4 +1,4 @@
-import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue, IObjectDidChange, Lambda, toJS, IObservableValue } from 'mobx';
+import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue, IObjectDidChange, Lambda, toJS, IObservableValue, isObservableObject, isComputed } from 'mobx';
 import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler, VisibleHandler, ScopeHandler, IfHandler, ContentHandler, ComponentHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { PropertyHandler } from './propertyBinding';
@@ -583,7 +583,21 @@ export class BindingEngine {
                                 context.preventCircularUpdateIn = false;
                             }
                             else {
-                                bindingProperties.bindingValue.set(value);
+                                /* If the observed 'thing' is a simple property on a viewmodel
+                                 * (no computed or other complex structure) and the viewmodel is observable
+                                 * then don't directly set the Observable Atom, but set the property
+                                 * through the proxied viewmodel. This way also observers of the
+                                 * proxied viewmodel are triggered
+                                 */
+                                if(isObservableObject(bindingProperties.scope) &&
+                                   !isComputed(bindingProperties.bindingValue) &&
+                                   bindingProperties.propertyName in bindingProperties.scope
+                                ) {
+                                    bindingProperties.scope[bindingProperties.propertyName] = value;
+                                }
+                                else {
+                                    bindingProperties.bindingValue.set(value);
+                                }
                             }
                         }
                     }

@@ -589,9 +589,9 @@ export class BindingEngine {
                                  * through the proxied viewmodel. This way also observers of the
                                  * proxied viewmodel are triggered
                                  */
-                                if(isObservableObject(bindingProperties.scope) &&
-                                   !isComputed(bindingProperties.bindingValue) &&
-                                   bindingProperties.propertyName in bindingProperties.scope
+                                if (isObservableObject(bindingProperties.scope) &&
+                                    !isComputed(bindingProperties.bindingValue) &&
+                                    bindingProperties.propertyName in bindingProperties.scope
                                 ) {
                                     bindingProperties.scope[bindingProperties.propertyName] = value;
                                 }
@@ -603,6 +603,9 @@ export class BindingEngine {
                     }
                     else {
                         bindingProperties.bindingValue = value;
+                        if (bindingProperties.propertyName in bindingProperties.scope) {
+                            bindingProperties.scope[bindingProperties.propertyName] = value;
+                        }
                     }
 
                     return this.unwrap(bindingProperties.bindingValue); // value can be manipulated by computeds, setters, etc.. So return the final value, maybe it's useful

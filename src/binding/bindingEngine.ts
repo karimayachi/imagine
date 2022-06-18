@@ -1,4 +1,4 @@
-import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue, IObjectDidChange, Lambda, toJS, IObservableValue, isObservableObject, isComputed } from 'mobx';
+import { isObservableProp, observe, IValueDidChange, isObservableArray, isObservable, getAtom, computed, IComputedValue, IObjectDidChange, Lambda, toJS, IObservableValue, isObservableObject, isComputed, isBoxedObservable } from 'mobx';
 import { BindingHandler, TextHandler, ValueHandler, EventHandler, ForEachHandler, AttributeHandler, HtmlHandler, ContextHandler, VisibleHandler, ScopeHandler, IfHandler, ContentHandler, ComponentHandler } from './bindingHandlers';
 import { BindingContext } from './bindingContext';
 import { PropertyHandler } from './propertyBinding';
@@ -356,7 +356,7 @@ export class BindingEngine {
         /* Fix for a very very fringy case: where somewhere in the dependency tree a property is not really a native property
          * but mapped through a getter or proxy or decorator to another class and we get just the ObservableValue back
          */
-        if (currentScope?.constructor.name === 'ObservableValue') {
+        if (isBoxedObservable(currentScope)) {
             currentScope = currentScope.get();
         }
         /* END FIX */
@@ -406,7 +406,7 @@ export class BindingEngine {
                 /* Fix for a very very fringy case: where somewhere in the dependency tree a property is not really a native property
                  * but mapped through a getter or proxy or decorator to another class and we get just the ObservableValue back
                  */
-                if (scope?.constructor.name === 'ObservableValue') {
+                if (isBoxedObservable(scope)) {
                     scope = scope.get();
                 }
                 /* END FIX */

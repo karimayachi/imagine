@@ -25,5 +25,7 @@
   "peerDependencies": {
     "mobx": "^5.15.4"
   },
-  "files": ["dist"]
+  "files": [
+    "dist"
+  ]
 }
